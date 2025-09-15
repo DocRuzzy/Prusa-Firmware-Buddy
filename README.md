@@ -59,6 +59,19 @@ The build process of this project is driven by CMake and `build.py` is just a hi
 - [Eclipse, STM32CubeIDE](doc/editor/stm32cubeide.md)
 - [Other LSP-based IDEs (Atom, Sublime Text, ...)](doc/editor/lsp-based-ides.md)
 
+##### Custom XL syringe toolhead
+
+For objectives, flags, and workflow specific to a syringe-based DWARF toolhead, see `doc/xl-syringe-fork.md`.
+
+Quick build example (DWARF with relaxed warm-up):
+
+```
+python3 utils/build.py --preset xl-dwarf --build-type release --bootloader no \
+    -D SYRINGE_RELAX_HEATUP:BOOL=ON \
+    -D SYRINGE_WATCH_TEMP_PERIOD:STRING=300 \
+    -D SYRINGE_WATCH_TEMP_INCREASE:STRING=2
+```
+
 #### Contributing
 
 If you want to contribute to the codebase, please read the [Contribution Guidelines](doc/contributing.md).

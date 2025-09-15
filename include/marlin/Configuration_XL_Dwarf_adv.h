@@ -96,7 +96,10 @@
    * and/or decrease WATCH_TEMP_INCREASE. WATCH_TEMP_INCREASE should not be set
    * below 2.
    */
-    #define WATCH_TEMP_PERIOD 20 // Seconds
+    // Relaxed watch settings for slow-heating XL Dwarf extruder
+    // Increase the period to allow more time for temperature to rise after setpoint change.
+    // Keep the minimum increase at 2°C to preserve a basic safety margin.
+    #define WATCH_TEMP_PERIOD 120 // Seconds (was 20)
     #define WATCH_TEMP_INCREASE 2 // Degrees Celsius
 #endif
 

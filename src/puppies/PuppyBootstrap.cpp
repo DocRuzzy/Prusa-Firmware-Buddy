@@ -33,6 +33,17 @@ namespace buddy::puppies {
 
 using buddy::hw::Pin;
 
+// Optional build-time filter: when FLASH_ONLY_DOCK is defined (to the underlying value of
+// buddy::puppies::Dock), only that single dock will have fingerprints computed and
+// firmware flashing attempted. Discovery and application start still run for all docks.
+static constexpr bool should_process_dock(Dock dock) {
+#ifdef FLASH_ONLY_DOCK
+    return static_cast<int>(std::to_underlying(dock)) == FLASH_ONLY_DOCK;
+#else
+    return true;
+#endif
+}
+
 const char *PuppyBootstrap::Progress::description() {
     if (stage == PuppyBootstrap::FlashingStage::START) {
         return "Waking up puppies";
@@ -209,16 +220,24 @@ PuppyBootstrap::BootstrapResult PuppyBootstrap::run(
 
         attempt_crash_dump_download(dock, address);
     #if PUPPY_FLASH_FW()
-        uint8_t offset = 0;
-        uint8_t size = sizeof(fingerprint_t);
+        if (should_process_dock(dock)) {
+            uint8_t offset = 0;
+            uint8_t size = sizeof(fingerprint_t);
         #if HAS_DWARF()
-        if (to_puppy_type(dock) == DWARF) {
-            // Check this chunk from one puppy, -1 fo modular bed which has different fingerprint
-            size = sizeof(fingerprint_t) / (result.discovered_num() - 1);
-            offset = size * (static_cast<uint8_t>(dock) - 1);
-        }
+            if (to_puppy_type(dock) == DWARF) {
+                // Check this chunk from one puppy, -1 for modular bed which has different fingerprint
+                size = sizeof(fingerprint_t) / (result.discovered_num() - 1);
+                offset = size * (static_cast<uint8_t>(dock) - 1);
+            }
         #endif
-        flash_firmware(dock, fingerprints, offset, size, percent_base, percent_per_puppy);
+            flash_firmware(dock, fingerprints, offset, size, percent_base, percent_per_puppy);
+        } else {
+            // We are not flashing this dock; fetch its actual fingerprint so run_app can succeed later
+            flasher.set_address(address);
+            if (flasher.get_fingerprint(fingerprints.get_fingerprint(dock)) != BootloaderProtocol::COMMAND_OK) {
+                fatal_error(ErrCode::ERR_SYSTEM_PUPPY_FINGERPRINT_MISMATCH);
+            }
+        }
     #endif
         percent_base += percent_per_puppy;
     }

@@ -28,28 +28,28 @@ Bootstrap (once per machine):
 python3 utils/bootstrap.py
 ```
 
-Build DWARF with relaxed warm-up (examples):
+Build DWARF with relaxed warm-up using the preset:
 - Release, no bootloader:
 ```bash
 python3 utils/build.py \
-  --preset xl-dwarf \
+  --preset xl-dwarf-syringe \
   --build-type release \
-  --bootloader no \
-  -D SYRINGE_RELAX_HEATUP:BOOL=ON \
-  -D SYRINGE_WATCH_TEMP_PERIOD:STRING=300 \
-  -D SYRINGE_WATCH_TEMP_INCREASE:STRING=2
+  --bootloader no
 ```
 - Debug (for tracing):
 ```bash
 python3 utils/build.py \
-  --preset xl-dwarf \
+  --preset xl-dwarf-syringe \
   --build-type debug \
-  --bootloader no \
-  -D SYRINGE_RELAX_HEATUP:BOOL=ON \
-  -D SYRINGE_WATCH_TEMP_PERIOD:STRING=300 \
-  -D SYRINGE_WATCH_TEMP_INCREASE:STRING=2
+  --bootloader no
 ```
 Artifacts are written under `build/` and `build/products/`.
+
+VS Code tasks
+- From the Command Palette run: “Tasks: Run Task” and pick one of:
+  - `Build: XL DWARF (syringe release)` — builds the DWARF with syringe relax flags.
+  - `Build: XL Buddy (flash T4 only)` — builds Buddy that flashes only T4.
+  - `Build: XL syringe (DWARF then Buddy)` — runs both in sequence (recommended). Ensure DWARF step completes first so Buddy embeds the fresh DWARF binary.
 
 Safety Notes
 - Do not set `SYRINGE_WATCH_TEMP_INCREASE` below 2°C.
@@ -100,9 +100,57 @@ git merge upstream/master
 # resolve, commit, push
 ```
 
-## Adding New Workflows / Presets (optional)
-- We can add a named preset (e.g., `xl-dwarf-syringe`) in `utils/presets/presets.json` to bake in the `-D` flags.
-- We can also add a small `README` snippet or VS Code task to invoke the syringe build directly.
+## Adding New Workflows / Presets
+- Added presets in `utils/presets/presets.json`:
+  - `xl-dwarf-syringe`: DWARF build with syringe warm-up relaxation defaults.
+  - `xl-syringe-t4`: Buddy build that will flash only `DWARF_5` (T4) on first boot.
+  These make builds reproducible without repeating long `-D` flag lists.
 
 ## Contact
 Keep this doc updated as changes land. Add sections per feature (load cell, fans) with decisions, flags, and acceptance tests.
+
+## Selective flashing to a single DWARF (toolhead)
+
+By default, during boot the Buddy firmware discovers all connected puppies (DWARF toolheads, Modular Bed, etc.), verifies their firmware fingerprints, and flashes any that don't match the firmware embedded in the Buddy image. That means an update typically applies to all detected DWARF toolheads.
+
+If you need to apply the syringe_relax_heatup changes to just one toolhead (e.g., only T4 / extruder 5), you have two practical options:
+
+1) Easiest (no rebuild): Physically disconnect the other DWARF toolheads during the update. The bootstrap only discovers connected puppies, so only the remaining connected toolhead(s) will be verified/flashed. Reconnect after the update.
+
+2) Build-time filter (one-off flashing): Build Buddy with a compile-time selector so only one dock is flashed. Use the `FLASH_ONLY_DOCK` option (or the `xl-syringe-t4` preset) to restrict flashing to a specific dock; other puppies are left untouched but still started.
+
+- Dock mapping on XL:
+  - `DWARF_1` = T0 → `FLASH_ONLY_DOCK=1`
+  - `DWARF_2` = T1 → `FLASH_ONLY_DOCK=2`
+  - `DWARF_3` = T2 → `FLASH_ONLY_DOCK=3`
+  - `DWARF_4` = T3 → `FLASH_ONLY_DOCK=4`
+  - `DWARF_5` = T4 → `FLASH_ONLY_DOCK=5`
+  - `DWARF_6` = T5 → `FLASH_ONLY_DOCK=6`
+
+Example A: flash only T4 (extruder 5 / `DWARF_5`) using the new preset:
+
+```bash
+python3 utils/build.py \
+  --preset xl-syringe-t4 \
+  --build-type release \
+  --bootloader no
+```
+
+Note: Build the DWARF firmware first using `--preset xl-dwarf-syringe` so `build-vscode-dwarf` contains the toolhead binary that Buddy will embed.
+
+Example B: the equivalent explicit flags (if not using the preset):
+
+```bash
+python3 utils/build.py \
+  --preset xl \
+  --build-type release \
+  --bootloader no \
+  -D SYRINGE_RELAX_HEATUP:BOOL=ON \
+  -D SYRINGE_WATCH_TEMP_PERIOD:STRING=300 \
+  -D SYRINGE_WATCH_TEMP_INCREASE:STRING=2 \
+  -D FLASH_ONLY_DOCK:STRING=5
+```
+
+Notes
+- The filter only affects which dock the firmware flashing step targets. Discovery, verification, and application start still run so all puppies boot normally.
+- Use this sparingly; keeping multiple DWARFs on different firmware variants can lead to inconsistent behavior vs the host.

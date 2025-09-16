@@ -147,6 +147,23 @@
             }
         },
         {
+            "name": "xl-syringe-t4",
+            "description": "Original Prusa XL (Buddy) — flash only DWARF_5 (T4) while embedding DWARF from build-vscode-dwarf",
+            "cacheVariables": {
+                "PRINTER": "XL",
+                "BOARD": "XLBUDDY",
+                "DWARF_BINARY_DIR": {
+                    "type": "FILEPATH",
+                    "value": "build-vscode-dwarf"
+                },
+                "MODULARBED_BINARY_DIR": {
+                    "type": "FILEPATH",
+                    "value": "build-vscode-modularbed"
+                },
+                "FLASH_ONLY_DOCK": "5"
+            }
+        },
+        {
             "name": "xl-burst",
             "description": "Original Prusa XL with Burst Stepping",
             "cacheVariables": {
@@ -201,6 +218,17 @@
             "cacheVariables": {
                 "PRINTER": "XL",
                 "BOARD": "DWARF"
+            }
+        },
+        {
+            "name": "xl-dwarf-syringe",
+            "description": "XL DWARF (toolhead) with syringe warm-up relaxation defaults",
+            "cacheVariables": {
+                "PRINTER": "XL",
+                "BOARD": "DWARF",
+                "SYRINGE_RELAX_HEATUP": true,
+                "SYRINGE_WATCH_TEMP_PERIOD": "300",
+                "SYRINGE_WATCH_TEMP_INCREASE": "2"
             }
         },
         {

@@ -41,3 +41,10 @@ if(PUPPY_FLASH_FW)
     message(FATAL_ERROR "Need resources when PUPPY_FLASH_FW is enabled.")
   endif()
 endif()
+
+# Optional: limit flashing to a single dock (DWARF_n) by passing -D FLASH_ONLY_DOCK=<n>
+# Dock mapping: 1=DWARF_1 (T0), 2=DWARF_2 (T1), ..., 6=DWARF_6 (T5)
+if(DEFINED FLASH_ONLY_DOCK)
+  message(STATUS "Puppies: will flash only dock ${FLASH_ONLY_DOCK}")
+  target_compile_definitions(firmware PRIVATE FLASH_ONLY_DOCK=${FLASH_ONLY_DOCK})
+endif()

@@ -1,0 +1,67 @@
+name: Release (full: build+package)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., v6.4.0-syringe-t4-r1)'
+        required: true
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Bootstrap toolchain
+        run: |
+          python3 utils/bootstrap.py
+
+      - name: Build DWARF (release, no bootloader)
+        run: |
+          python3 utils/build.py --preset xl-dwarf-syringe --build-type release --bootloader no
+
+      - name: Build Buddy (T4-only, release, no bootloader)
+        run: |
+          python3 utils/build.py --preset xl-syringe-t4 --build-type release --bootloader no
+
+      - name: Package artifacts
+        run: |
+          python3 utils/package_release.py --products-dir build/products --out-dir dist --include-dwarf
+
+      - name: List dist
+        run: ls -lh dist
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          files: |
+            dist/*
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

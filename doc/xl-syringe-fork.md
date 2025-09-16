@@ -45,6 +45,11 @@ python3 utils/build.py \
 ```
 Artifacts are written under `build/` and `build/products/`.
 
+Release artifacts
+- The Buddy image (`.bbf`) for flashing from USB is emitted as `build/products/xl-syringe-t4_<type>_noboot.bbf`.
+- DWARF toolhead binaries (`firmware` and `firmware.bin`) are embedded into the Buddy image automatically; you generally do not need to flash DWARF over SWD.
+- Optional: keep the matching `xl-dwarf-syringe_*_noboot.bin` alongside your release for completeness.
+
 VS Code tasks
 - From the Command Palette run: “Tasks: Run Task” and pick one of:
   - `Build: XL DWARF (syringe release)` — builds the DWARF with syringe relax flags.
@@ -154,3 +159,15 @@ python3 utils/build.py \
 Notes
 - The filter only affects which dock the firmware flashing step targets. Discovery, verification, and application start still run so all puppies boot normally.
 - Use this sparingly; keeping multiple DWARFs on different firmware variants can lead to inconsistent behavior vs the host.
+
+## Flash from USB (Buddy `.bbf`)
+
+Once you have built a release Buddy image with the `xl-syringe-t4` preset, you can flash it from USB like any stock update:
+
+1) Copy `build/products/xl-syringe-t4_release_noboot.bbf` to the root of a FAT32 USB stick.
+2) Insert the USB stick into the XL.
+3) On the printer, go to System > Firmware Update and select the `.bbf` file.
+4) The Buddy will reboot and apply the update. On first boot after the update, only dock 5 (T4) will be flashed (other docks are skipped).
+5) After the update completes, verify the version string (System > About) and confirm the DWARF on T4 reports the expected fingerprint.
+
+Tip: you can optionally package the `.bbf` and a checksum using `utils/package_release.py` to prepare uploadable assets for a GitHub Release.

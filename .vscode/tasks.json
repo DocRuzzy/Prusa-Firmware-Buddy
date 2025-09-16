@@ -169,6 +169,20 @@
                 "Build: XL DWARF (syringe release)",
                 "Build: XL Buddy (flash T4 only)"
             ]
+        },
+        {
+            "label": "Package: XL syringe release assets",
+            "type": "shell",
+            "command": "python3",
+            "args": [
+                "${workspaceFolder}/utils/package_release.py",
+                "--products-dir",
+                "${workspaceFolder}/build/products",
+                "--out-dir",
+                "${workspaceFolder}/dist",
+                "--include-dwarf"
+            ],
+            "problemMatcher": []
         }
     ]
 }

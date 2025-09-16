@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"xlocale": "cpp"
+		},
+		"task.allowAutomaticTasks": "off",
+		"clangd.arguments": [
+			"--query-driver=**/.dependencies/gcc-arm-none-eabi-*/*/arm-none-eabi-g*",
+			"--header-insertion=never"
+		]
+	}
+}

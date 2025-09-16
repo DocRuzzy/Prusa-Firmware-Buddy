@@ -1,5 +1,5 @@
 {
-    "cmake.configureOnOpen": true,
+    "cmake.configureOnOpen": false,
     "cmake.copyCompileCommands": "${workspaceFolder}/compile_commands.json",
     "cmake.cmakePath": "${workspaceFolder}/.dependencies/cmake-3.28.3/bin/cmake",
     "cmake.generator": "Ninja",
@@ -7,7 +7,7 @@
     "files.associations": {
         "xlocale": "cpp"
     },
-    "task.allowAutomaticTasks": "on",
+    "task.allowAutomaticTasks": "off",
     "clangd.arguments": [
         "--query-driver=**/.dependencies/gcc-arm-none-eabi-*/*/arm-none-eabi-g*",
         "--header-insertion=never"

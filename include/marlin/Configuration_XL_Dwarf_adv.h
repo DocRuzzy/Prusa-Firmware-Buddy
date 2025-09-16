@@ -96,8 +96,25 @@
    * and/or decrease WATCH_TEMP_INCREASE. WATCH_TEMP_INCREASE should not be set
    * below 2.
    */
-    #define WATCH_TEMP_PERIOD 20 // Seconds
-    #define WATCH_TEMP_INCREASE 2 // Degrees Celsius
+        // Watch settings for slow-heating XL Dwarf extruder.
+        // Default: slightly relaxed vs upstream (120s/2°C). For syringe setups,
+        // enable SYRINGE_RELAX_HEATUP (CMake option) to override via compile definitions.
+        #if defined(SYRINGE_RELAX_HEATUP) && (SYRINGE_RELAX_HEATUP)
+            // Clamp to Marlin sanity limits: WATCH_TEMP_PERIOD must be in seconds and <= 500
+            #ifndef SYRINGE_WATCH_TEMP_PERIOD
+                #define SYRINGE_WATCH_TEMP_PERIOD 300
+            #endif
+            #ifndef SYRINGE_WATCH_TEMP_INCREASE
+                #define SYRINGE_WATCH_TEMP_INCREASE 1
+            #endif
+            #undef WATCH_TEMP_PERIOD
+            #undef WATCH_TEMP_INCREASE
+            #define WATCH_TEMP_PERIOD SYRINGE_WATCH_TEMP_PERIOD
+            #define WATCH_TEMP_INCREASE SYRINGE_WATCH_TEMP_INCREASE
+        #else
+            #define WATCH_TEMP_PERIOD 120 // Seconds (was 20)
+            #define WATCH_TEMP_INCREASE 2 // Degrees Celsius
+        #endif
 #endif
 
 /**

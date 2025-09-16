@@ -2,6 +2,43 @@
     // See https://go.microsoft.com/fwlink/?LinkId=733558
     // for the documentation about the tasks.json format
     "version": "2.0.0",
+    "inputs": [
+        {
+            "id": "cmakePreset",
+            "type": "pickString",
+            "description": "Select CMake configure preset",
+            "options": [
+                "mini_debug_noboot",
+                "mini_debug_boot",
+                "mini_release_noboot",
+                "mini_release_boot",
+                "coreone_debug_noboot",
+                "coreone_debug_boot",
+                "coreone_release_noboot",
+                "coreone_release_boot"
+            ],
+            "default": "mini_debug_noboot"
+        },
+        {
+            "id": "binaryDir",
+            "type": "pickString",
+            "description": "Select build directory",
+            "options": [
+                "build-vscode-buddy",
+                "build-vscode-dwarf",
+                "build-vscode-modularbed",
+                "build-vscode-xbuddy-extension"
+            ],
+            "default": "build-vscode-buddy"
+        },
+        {
+            "id": "buildJobs",
+            "type": "pickString",
+            "description": "Select parallel build jobs (-j)",
+            "options": ["4", "8", "12", "16"],
+            "default": "8"
+        }
+    ],
     "tasks": [
         {
             "label": "Bootstrap",
@@ -10,6 +47,26 @@
             "windows": {
                 "command": "python ${workspaceFolder}\\utils\\bootstrap.py"
             }
+        },
+        {
+            "label": "CMake: Configure (preset)",
+            "type": "process",
+            "command": "${workspaceFolder}/.dependencies/cmake-3.28.3/bin/cmake",
+            "windows": {
+                "command": "${workspaceFolder}\\.dependencies\\cmake-3.28.3\\bin\\cmake.exe"
+            },
+            "args": ["--preset", "${input:cmakePreset}"],
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake: Build (dir)",
+            "type": "process",
+            "command": "${workspaceFolder}/.dependencies/cmake-3.28.3/bin/cmake",
+            "windows": {
+                "command": "${workspaceFolder}\\.dependencies\\cmake-3.28.3\\bin\\cmake.exe"
+            },
+            "args": ["--build", "${workspaceFolder}/${input:binaryDir}", "--", "-j", "${input:buildJobs}"],
+            "problemMatcher": []
         },
         {
             "label": "Install simulator_as_qemu",
@@ -31,14 +88,11 @@
         },
         {
             "label": "Prepare Visual Studio Code",
-            "runOptions": {
-                "runOn": "folderOpen"
-            },
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Bootstrap",
                 "Install simulator_as_qemu",
-                "Install pre-commit",
+                "Install pre-commit"
             ]
         },
         {
@@ -78,5 +132,57 @@
                 "reveal": "silent",
             }
         },
+        {
+            "label": "Build: XL DWARF (syringe release)",
+            "type": "shell",
+            "command": "python3",
+            "args": [
+                "${workspaceFolder}/utils/build.py",
+                "--preset",
+                "xl-dwarf-syringe",
+                "--build-type",
+                "release",
+                "--bootloader",
+                "no"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Build: XL Buddy (flash T4 only)",
+            "type": "shell",
+            "command": "python3",
+            "args": [
+                "${workspaceFolder}/utils/build.py",
+                "--preset",
+                "xl-syringe-t4",
+                "--build-type",
+                "release",
+                "--bootloader",
+                "no"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Build: XL syringe (DWARF then Buddy)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Build: XL DWARF (syringe release)",
+                "Build: XL Buddy (flash T4 only)"
+            ]
+        },
+        {
+            "label": "Package: XL syringe release assets",
+            "type": "shell",
+            "command": "python3",
+            "args": [
+                "${workspaceFolder}/utils/package_release.py",
+                "--products-dir",
+                "${workspaceFolder}/build/products",
+                "--out-dir",
+                "${workspaceFolder}/dist",
+                "--include-dwarf"
+            ],
+            "problemMatcher": []
+        }
     ]
 }

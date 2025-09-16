@@ -59,6 +59,56 @@ The build process of this project is driven by CMake and `build.py` is just a hi
 - [Eclipse, STM32CubeIDE](doc/editor/stm32cubeide.md)
 - [Other LSP-based IDEs (Atom, Sublime Text, ...)](doc/editor/lsp-based-ides.md)
 
+##### Custom XL syringe toolhead
+
+For objectives, flags, and workflow specific to a syringe-based DWARF toolhead, see `doc/xl-syringe-fork.md`.
+
+Quick build example (DWARF with relaxed warm-up):
+
+```
+python3 utils/build.py --preset xl-dwarf --build-type release --bootloader no \
+    -D SYRINGE_RELAX_HEATUP:BOOL=ON \
+    -D SYRINGE_WATCH_TEMP_PERIOD:STRING=300 \
+    -D SYRINGE_WATCH_TEMP_INCREASE:STRING=2
+```
+
+###### Releasing the XL syringe (minimal vs full)
+
+- Minimal (use local builds and package, then publish with GitHub CLI):
+    1. Build DWARF and Buddy release artifacts
+         ```bash
+         python3 utils/build.py --preset xl-dwarf-syringe --build-type release --bootloader no
+         python3 utils/build.py --preset xl-syringe-t4   --build-type release --bootloader no
+         ```
+    2. Package to `dist/` with checksums
+         ```bash
+         python3 utils/package_release.py --products-dir build/products --out-dir dist --include-dwarf
+         ```
+    3. Create and push a tag (adjust tag as needed)
+         ```bash
+         git tag -a v6.4.0-syringe-t4-r1 -m "XL syringe T4-only r1 (based on 6.4.0)"
+         git push origin v6.4.0-syringe-t4-r1
+         ```
+    4. Publish release with `gh` (GitHub CLI)
+         ```bash
+         # Optional: generate brief notes
+         printf "XL syringe T4-only build based on 6.4.0\n\nFeatures\n- Syringe relaxed heat-up on DWARF\n- Buddy flashes only dock 5 (T4) on first boot\n\nHow to flash\n- Copy the .bbf to a FAT32 USB stick and update via System > Firmware Update\n- See doc/xl-syringe-fork.md for details\n" > RELEASE_NOTES_XL_SYRINGE_T4.md
+
+         # Create the release and upload artifacts from dist/
+         gh release create v6.4.0-syringe-t4-r1 \
+             dist/xl-syringe-t4_release_noboot.bbf \
+             dist/xl-syringe-t4_release_noboot.bbf.sha256 \
+             dist/xl-dwarf-syringe_release_noboot.bin \
+             dist/xl-dwarf-syringe_release_noboot.bin.sha256 \
+             --title "XL syringe T4-only (6.4.0 r1)" \
+             --notes-file RELEASE_NOTES_XL_SYRINGE_T4.md
+         ```
+
+- Full automation (CI builds and publishes on tag):
+    - Push a tag (e.g., `v6.4.0-syringe-t4-r1`) and GitHub Actions workflow `Release (full: build+package)` will:
+        - bootstrap toolchain, build both presets, package to `dist/`, and publish a release with all assets.
+    - You can also run it manually via Actions > Release (full: build+package) > Run workflow, providing the `tag` input.
+
 #### Contributing
 
 If you want to contribute to the codebase, please read the [Contribution Guidelines](doc/contributing.md).

@@ -254,3 +254,13 @@ target_link_libraries(Marlin PRIVATE CppStdExtensions logging freertos)
 if(HAS_XBUDDY_EXTENSION)
   target_link_libraries(Marlin PUBLIC XBuddyExtensionShared)
 endif()
+
+# Pass syringe heat-up relaxation options to Marlin as compile definitions.
+# Only relevant for DWARF/toolhead builds where Marlin's Configuration_* applies.
+if(SYRINGE_RELAX_HEATUP)
+  target_compile_definitions(Marlin PUBLIC
+    SYRINGE_RELAX_HEATUP=1
+    SYRINGE_WATCH_TEMP_PERIOD=${SYRINGE_WATCH_TEMP_PERIOD}
+    SYRINGE_WATCH_TEMP_INCREASE=${SYRINGE_WATCH_TEMP_INCREASE}
+  )
+endif()

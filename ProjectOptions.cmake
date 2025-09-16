@@ -778,6 +778,24 @@ set(DEBUG_WITH_BEEPS
     )
 define_boolean_option(DEBUG_WITH_BEEPS ${DEBUG_WITH_BEEPS})
 
+# Provide an opt-in switch to relax the hotend heat-up watchdog on slow-heating toolheads
+# (e.g. syringe extruder retrofits). Applies to DWARF firmware via Marlin config.
+set(SYRINGE_RELAX_HEATUP
+  "NO"
+  CACHE BOOL "Relax hotend heat-up watch check (DWARF/toolhead)."
+  )
+define_boolean_option(SYRINGE_RELAX_HEATUP ${SYRINGE_RELAX_HEATUP})
+
+# Tunables for the relaxed mode. Keep within Marlin sanity limits (period <= 500 seconds).
+set(SYRINGE_WATCH_TEMP_PERIOD
+  "300"
+  CACHE STRING "Seconds allowed for the hotend to rise by SYRINGE_WATCH_TEMP_INCREASE."
+  )
+set(SYRINGE_WATCH_TEMP_INCREASE
+  "2"
+  CACHE STRING "Degrees Celsius the hotend must increase within the watch period."
+  )
+
 # Use websocket to talk to Connect instead of many http requests.
 #
 # The server part is not ready and the protocol is in a flux too. For that reason, this is not

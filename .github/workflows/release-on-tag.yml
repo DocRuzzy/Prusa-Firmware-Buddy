@@ -1,0 +1,51 @@
+name: Publish release on tag
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Ensure dist exists
+        run: |
+          if [ ! -d dist ]; then
+            echo "dist/ not found. Running packaging script to create artifacts from build/products if present.";
+            python3 utils/package_release.py --products-dir build/products --out-dir dist --include-dwarf || true
+          else
+            echo "dist/ found"
+          fi
+
+      - name: List dist
+        run: ls -la dist || true
+
+      - name: Create GitHub Release (draft=false)
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload dist assets
+        if: steps.create_release.outputs.upload_url != ''
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: dist
+          asset_name: dist
+          asset_content_type: application/zip

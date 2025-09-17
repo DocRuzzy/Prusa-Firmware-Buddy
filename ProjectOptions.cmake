@@ -739,18 +739,21 @@ define_boolean_option(HAS_LEDS_MENU ${HAS_LEDS_MENU})
 
 # define enabled features
 
-if(BOOTLOADER STREQUAL "YES"
-   AND (PRINTER STREQUAL "COREONE"
-        OR PRINTER STREQUAL "MINI"
-        OR PRINTER STREQUAL "MK4"
-        OR PRINTER STREQUAL "MK3.5"
-        OR PRINTER STREQUAL "iX"
-        OR BOARD STREQUAL "XLBUDDY"
-       )
-   )
-  set(BOOTLOADER_UPDATE YES)
-else()
-  set(BOOTLOADER_UPDATE NO)
+# Allow BOOTLOADER_UPDATE to be explicitly overridden via -D BOOTLOADER_UPDATE:BOOL=ON/OFF.
+# If not provided, compute a sensible default based on printer/board when BOOTLOADER is YES.
+if(NOT DEFINED BOOTLOADER_UPDATE)
+  if(BOOTLOADER STREQUAL "YES"
+     AND (PRINTER STREQUAL "COREONE"
+          OR PRINTER STREQUAL "MINI"
+          OR PRINTER STREQUAL "MK4"
+          OR PRINTER STREQUAL "MK3.5"
+          OR PRINTER STREQUAL "iX"
+          OR BOARD STREQUAL "XLBUDDY")
+     )
+    set(BOOTLOADER_UPDATE YES)
+  else()
+    set(BOOTLOADER_UPDATE NO)
+  endif()
 endif()
 define_boolean_option(BOOTLOADER_UPDATE ${BOOTLOADER_UPDATE})
 

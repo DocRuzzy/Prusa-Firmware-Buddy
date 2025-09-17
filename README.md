@@ -104,6 +104,23 @@ python3 utils/build.py --preset xl-dwarf --build-type release --bootloader no \
              --notes-file RELEASE_NOTES_XL_SYRINGE_T4.md
          ```
 
+###### VS Code presets: safe XL builds (no bootloader update)
+
+You can build safe application-layout images that never attempt a bootloader update directly via the CMake preset picker in VS Code. These appear after opening the workspace:
+
+- `xl_release_boot_safe` — XL release build, application layout, bootloader update disabled.
+- `xl_debug_boot_safe` — XL debug build, application layout, bootloader update disabled.
+- `xl_syringe_t4_release_boot_safe` — XL release build that only flashes DWARF_5 (T4) on first boot and has bootloader update disabled.
+- `xl_syringe_t4_debug_boot_safe` — Debug variant of the above.
+
+If these presets aren’t visible, use “CMake: Delete Cache and Reconfigure” and re-open the preset picker. The presets are defined in `CMakeUserPresets.json` and inherit from the stock XL presets while forcing `BOOTLOADER_UPDATE=OFF`; the syringe T4 variants also set `FLASH_ONLY_DOCK=5`.
+
+To flash the generated `.bbf` safely on developer hardware with the verification jumper cut:
+
+1. Copy the `.bbf` from `build/products/` to a FAT32 USB stick.
+2. On the printer: System → Firmware Update → select the file.
+3. Wait for the first boot to finish resource installation; do not power off.
+
 - Full automation (CI builds and publishes on tag):
     - Push a tag (e.g., `v6.4.0-syringe-t4-r1`) and GitHub Actions workflow `Release (full: build+package)` will:
         - bootstrap toolchain, build both presets, package to `dist/`, and publish a release with all assets.

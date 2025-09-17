@@ -1,0 +1,41 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "xl_release_boot_safe",
+      "inherits": ["xl_release_boot"],
+      "cacheVariables": {
+        "BOOTLOADER_UPDATE": {
+          "type": "BOOL",
+          "value": "OFF"
+        }
+      }
+    },
+    {
+      "name": "xl_debug_boot_safe",
+      "inherits": ["xl_debug_boot"],
+      "cacheVariables": {
+        "BOOTLOADER_UPDATE": {
+          "type": "BOOL",
+          "value": "OFF"
+        }
+      }
+    },
+    {
+      "name": "xl_syringe_t4_release_boot_safe",
+      "inherits": ["xl_release_boot"],
+      "cacheVariables": {
+        "BOOTLOADER_UPDATE": { "type": "BOOL", "value": "OFF" },
+        "FLASH_ONLY_DOCK":   { "type": "STRING", "value": "5" }
+      }
+    },
+    {
+      "name": "xl_syringe_t4_debug_boot_safe",
+      "inherits": ["xl_debug_boot"],
+      "cacheVariables": {
+        "BOOTLOADER_UPDATE": { "type": "BOOL", "value": "OFF" },
+        "FLASH_ONLY_DOCK":   { "type": "STRING", "value": "5" }
+      }
+    }
+  ]
+}

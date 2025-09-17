@@ -15,7 +15,13 @@
                 "coreone_debug_noboot",
                 "coreone_debug_boot",
                 "coreone_release_noboot",
-                "coreone_release_boot"
+                "coreone_release_boot",
+                "xl_release_boot",
+                "xl_debug_boot",
+                "xl_release_boot_safe",
+                "xl_debug_boot_safe",
+                "xl_syringe_t4_release_boot_safe",
+                "xl_syringe_t4_debug_boot_safe"
             ],
             "default": "mini_debug_noboot"
         },
@@ -47,6 +53,46 @@
             "windows": {
                 "command": "python ${workspaceFolder}\\utils\\bootstrap.py"
             }
+        },
+        {
+            "label": "CMake: Configure (xl_release_boot_safe)",
+            "type": "process",
+            "command": "${workspaceFolder}/.dependencies/cmake-3.28.3/bin/cmake",
+            "windows": {
+                "command": "${workspaceFolder}\\.dependencies\\cmake-3.28.3\\bin\\cmake.exe"
+            },
+            "args": ["--preset", "xl_release_boot_safe"],
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake: Build (xl_release_boot_safe)",
+            "type": "process",
+            "command": "${workspaceFolder}/.dependencies/cmake-3.28.3/bin/cmake",
+            "windows": {
+                "command": "${workspaceFolder}\\.dependencies\\cmake-3.28.3\\bin\\cmake.exe"
+            },
+            "args": ["--build", "${workspaceFolder}/build-vscode-buddy", "--", "-j", "${input:buildJobs}"],
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake: Configure (xl_syringe_t4_release_boot_safe)",
+            "type": "process",
+            "command": "${workspaceFolder}/.dependencies/cmake-3.28.3/bin/cmake",
+            "windows": {
+                "command": "${workspaceFolder}\\.dependencies\\cmake-3.28.3\\bin\\cmake.exe"
+            },
+            "args": ["--preset", "xl_syringe_t4_release_boot_safe"],
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake: Build (xl_syringe_t4_release_boot_safe)",
+            "type": "process",
+            "command": "${workspaceFolder}/.dependencies/cmake-3.28.3/bin/cmake",
+            "windows": {
+                "command": "${workspaceFolder}\\.dependencies\\cmake-3.28.3\\bin\\cmake.exe"
+            },
+            "args": ["--build", "${workspaceFolder}/build-vscode-buddy", "--", "-j", "${input:buildJobs}"],
+            "problemMatcher": []
         },
         {
             "label": "CMake: Configure (preset)",

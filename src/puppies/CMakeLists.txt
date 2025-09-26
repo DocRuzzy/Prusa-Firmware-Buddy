@@ -14,6 +14,20 @@ target_sources(
 
 target_link_libraries(BuddyHeaders INTERFACE lightmodbus)
 
+ # Optional diagnostic LED blink support during puppy bootstrap
+ option(PUPPY_DIAG_BLINK "Enable diagnostic LED blink patterns during puppy bootstrap" OFF)
+ if(PUPPY_DIAG_BLINK)
+   message(STATUS "Puppies: diagnostic LED blink enabled")
+   target_compile_definitions(firmware PRIVATE PUPPY_DIAG_BLINK)
+ endif()
+
+# Diagnostic: skip entire puppy bootstrap logic (address assignment, flashing, fingerprinting)
+option(PUPPY_SKIP_BOOTSTRAP "Bypass puppy bootstrap logic for isolation testing" OFF)
+if(PUPPY_SKIP_BOOTSTRAP)
+  message(STATUS "Puppies: skipping bootstrap (diagnostic)")
+  target_compile_definitions(firmware PRIVATE PUPPY_SKIP_BOOTSTRAP)
+endif()
+
 if(HAS_DWARF)
   target_sources(firmware PUBLIC Dwarf.cpp)
 endif()
@@ -47,4 +61,18 @@ endif()
 if(DEFINED FLASH_ONLY_DOCK)
   message(STATUS "Puppies: will flash only dock ${FLASH_ONLY_DOCK}")
   target_compile_definitions(firmware PRIVATE FLASH_ONLY_DOCK=${FLASH_ONLY_DOCK})
+endif()
+
+# Optional: choose which single DWARF dock is considered the minimal required dock for single-tool
+# setups. Default is 1 (DWARF_1). Pass -D SINGLE_TOOL_DOCK=<1..6> to override.
+if(DEFINED SINGLE_TOOL_DOCK)
+  message(STATUS "Puppies: minimal single-tool dock set to ${SINGLE_TOOL_DOCK}")
+  target_compile_definitions(firmware PRIVATE SINGLE_TOOL_DOCK=${SINGLE_TOOL_DOCK})
+endif()
+
+# Optional diagnostic: force accepting current puppy configuration after N attempts.
+# Usage: -D PUPPY_FORCE_ACCEPT_AFTER_ATTEMPT=2 (or other attempt count)
+if(DEFINED PUPPY_FORCE_ACCEPT_AFTER_ATTEMPT)
+  message(STATUS "Puppies: diagnostic mode - force accept after attempt ${PUPPY_FORCE_ACCEPT_AFTER_ATTEMPT}")
+  target_compile_definitions(firmware PRIVATE PUPPY_FORCE_ACCEPT_AFTER_ATTEMPT=${PUPPY_FORCE_ACCEPT_AFTER_ATTEMPT})
 endif()

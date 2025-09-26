@@ -75,7 +75,9 @@ bool PrusaToolChangerUtils::init(bool first_run) {
 bool PrusaToolChangerUtils::autodetect_toolchanger_enabled() {
     // This will detect whenever printer will be threated as multitool or singletool printer. Single tool means tool is firmly attached to effector, no toolchanger mechanism.
 
-    // Detection is done under assumption that if there is single dwarf, it has to be connected to DWARF1 connector, otherwise PuppyBootstrap will not boot.
+    // Detection historically assumed that a single dwarf must be on DWARF1, otherwise PuppyBootstrap would not boot.
+    // Our fork allows configuring the minimal required dock at build time via SINGLE_TOOL_DOCK (defaults to DWARF1);
+    // logic below still treats "exactly one enabled dwarf" as single-tool.
     // if multiple dwarfs are connected, printer is multitool
 
     uint8_t num_dwarfs = 0;

@@ -582,7 +582,34 @@ def store_products(products: List[Path], build_config: BuildConfiguration,
                                                 or '')
         else:
             name = base_name
-        destination = products_dir / (name + product.suffix)
+        # Add a short git hash to make output filenames more descriptive when possible
+        git_suffix = ''
+        try:
+            git_hash = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], cwd=project_root).decode().strip()
+            if git_hash:
+                git_suffix = '_' + git_hash
+        except Exception:
+            # leave git_suffix empty if git is unavailable
+            git_suffix = ''
+
+        # If SINGLE_TOOL_DOCK is passed as a cmake cache variable, include it in the filename
+        dock_suffix = ''
+        try:
+            # look for SINGLE_TOOL_DOCK in preset cache variables or environment
+            # prefer explicit environment variable if provided
+            dock_env = os.environ.get('SINGLE_TOOL_DOCK')
+            if dock_env:
+                dock_suffix = f'_dock{dock_env}'
+            else:
+                # fallback: try to read from build_config custom entries
+                for k, v in getattr(build_config, 'preset').cache_variables.items():
+                    if k == 'SINGLE_TOOL_DOCK':
+                        dock_suffix = f'_dock{v}'
+                        break
+        except Exception:
+            dock_suffix = ''
+
+        destination = products_dir / (name + git_suffix + dock_suffix + product.suffix)
         shutil.copy(product, destination)
 
 

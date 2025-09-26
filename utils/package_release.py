@@ -38,21 +38,38 @@ def main() -> None:
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    # Buddy assets
-    buddy_bbf = sorted(products.glob('xl-syringe-t4_*_noboot.bbf'))
-    if not buddy_bbf:
-        raise SystemExit('No Buddy .bbf found (expected pattern xl-syringe-t4_*_noboot.bbf). Build the preset first.')
+    # Buddy assets: find all .bbf starting with the xl-syringe-t4 prefix and containing '_noboot'
+    candidates = [p for p in products.glob('xl-syringe-t4*.bbf') if '_noboot' in p.name]
+    if not candidates:
+        raise SystemExit('No Buddy .bbf found (expected pattern xl-syringe-t4*_noboot*.bbf). Build the preset first.')
 
-    for bbf in buddy_bbf:
+    # Score candidates: prefer filenames containing a git short-hash and/or a _dock<N> suffix
+    import re
+
+    git_re = re.compile(r'_[0-9a-f]{7,}')
+    dock_re = re.compile(r'_dock\d+')
+
+    def score(path: Path) -> tuple:
+        name = path.name
+        has_git = 1 if git_re.search(name) else 0
+        has_dock = 1 if dock_re.search(name) else 0
+        # longer names are likely more descriptive (contain version/hash)
+        return (has_git + has_dock, has_git, has_dock, len(name))
+
+    candidates_sorted = sorted(candidates, key=score, reverse=True)
+
+    # copy the best candidate (most descriptive) first, then copy any others as well
+    for bbf in candidates_sorted:
         dest = out / bbf.name
         shutil.copy2(bbf, dest)
+        # write checksum
         with (dest.with_suffix(dest.suffix + '.sha256')).open('w') as f:
             f.write(f'{sha256sum(dest)}  {dest.name}\n')
 
-        # Optional map/bin for debugging context
+        # Copy associated side artifacts if present (.map and .bin)
         for ext in ('.map', '.bin'):
             side = products / (bbf.stem + ext)
-            if side.exists() and ext == '.map':
+            if side.exists():
                 shutil.copy2(side, out / side.name)
 
     # Optionally include DWARF .bin for reference

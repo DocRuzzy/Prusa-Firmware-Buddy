@@ -11,6 +11,26 @@
 
 namespace buddy::puppies {
 
+// Allow selecting which single DWARF dock is required for minimal single-tool configurations.
+// Default remains DWARF_1; can be overridden at configure time with -D SINGLE_TOOL_DOCK=<1..6>.
+#ifndef SINGLE_TOOL_DOCK
+#define SINGLE_TOOL_DOCK 1
+#endif
+
+// Map SINGLE_TOOL_DOCK (1..6) to the corresponding Dock enum value at compile time.
+// Placed at namespace scope to allow use in class static initializers without incomplete-type issues.
+static constexpr Dock single_tool_default_dock() {
+    switch (SINGLE_TOOL_DOCK) {
+    case 1: return Dock::DWARF_1;
+    case 2: return Dock::DWARF_2;
+    case 3: return Dock::DWARF_3;
+    case 4: return Dock::DWARF_4;
+    case 5: return Dock::DWARF_5;
+    case 6: return Dock::DWARF_6;
+    default: return Dock::DWARF_1; // Fallback to DWARF_1 on invalid input
+    }
+}
+
 /**
  * @brief Start sequence of puppy boards (Detect, Flash, start application)
  *
@@ -87,14 +107,14 @@ public:
         return (BootloaderProtocol::Address)((uint8_t)BootloaderProtocol::Address::MODBUS_OFFSET + (uint8_t)dock);
     }
 
-    /// @brief  This is minimal puppy configuration that is needed for printer to boot up. Minimal puppy config is that we have modular bed & dwarf 1
+    /// @brief  This is minimal puppy configuration that is needed for printer to boot up. Minimal puppy config is that we have modular bed & (configurable) single dwarf dock
     static constexpr inline BootstrapResult MINIMAL_PUPPY_CONFIG {
         0
 #if HAS_PUPPY_MODULARBED()
             | 1 << static_cast<uint8_t>(Dock::MODULAR_BED)
 #endif
 #if HAS_DWARF()
-            | 1 << static_cast<uint8_t>(Dock::DWARF_1)
+            | 1 << static_cast<uint8_t>(single_tool_default_dock())
 #endif
 #if HAS_XBUDDY_EXTENSION()
             | 1 << std::to_underlying(Dock::XBUDDY_EXTENSION)

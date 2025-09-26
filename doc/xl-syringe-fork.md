@@ -160,6 +160,26 @@ Notes
 - The filter only affects which dock the firmware flashing step targets. Discovery, verification, and application start still run so all puppies boot normally.
 - Use this sparingly; keeping multiple DWARFs on different firmware variants can lead to inconsistent behavior vs the host.
 
+## Single-tool on a non-T0 dock (booting with only T4 connected)
+
+By default the printer expects at least `DWARF_1` (T0) to be present for a minimal boot. If you disconnect all other toolheads and leave only T4 plugged in, the printer will fail to boot with a puppy-not-responding error for `DWARF_1`.
+
+You can override which DWARF dock is considered the minimal required single-tool dock at build time using `SINGLE_TOOL_DOCK`:
+
+```bash
+python3 utils/build.py \
+  --preset xl \
+  --build-type release \
+  --bootloader no \
+  -D FLASH_ONLY_DOCK:STRING=5 \
+  -D SINGLE_TOOL_DOCK:STRING=5
+```
+
+Notes
+- This does not change tool numbering in Marlin; it only relaxes the minimal device presence check so the system can boot when only T4 is physically connected.
+- If all toolheads are connected, you do not need `SINGLE_TOOL_DOCK`.
+- The `xl-syringe-t4` preset focuses flashing on T4; add `-D SINGLE_TOOL_DOCK=5` only if you physically run with T4 as the sole connected toolhead.
+
 ## Flash from USB (Buddy `.bbf`)
 
 Once you have built a release Buddy image with the `xl-syringe-t4` preset, you can flash it from USB like any stock update:

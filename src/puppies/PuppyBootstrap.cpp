@@ -23,6 +23,13 @@
 #include <random.h>
 #include "bsod.h"
 
+// Syringe patch toggle header (macro gating for bisection / variant builds)
+#include <option/syringe_patch_toggles.h>
+
+#ifdef PUPPY_DIAG_BLINK
+#include "stm32f4xx_hal.h"
+#endif
+
 #if HAS_XBUDDY_EXTENSION()
     #include <buddy/mmu_port.hpp>
 #endif
@@ -37,10 +44,15 @@ using buddy::hw::Pin;
 // buddy::puppies::Dock), only that single dock will have fingerprints computed and
 // firmware flashing attempted. Discovery and application start still run for all docks.
 static constexpr bool should_process_dock(Dock dock) {
-#ifdef FLASH_ONLY_DOCK
-    return static_cast<int>(std::to_underlying(dock)) == FLASH_ONLY_DOCK;
+#if SYRINGE_PATCH_BOOTSTRAP_SELECTIVE_FLASH
+    #ifdef FLASH_ONLY_DOCK
+        return static_cast<int>(std::to_underlying(dock)) == FLASH_ONLY_DOCK;
+    #else
+        return true; // selective flash feature enabled but no specific dock requested
+    #endif
 #else
-    return true;
+        (void)dock;
+        return true; // feature gated OFF -> always process
 #endif
 }
 
@@ -102,6 +114,56 @@ PuppyBootstrap::BootstrapResult PuppyBootstrap::run(
     [[maybe_unused]] PuppyBootstrap::BootstrapResult minimal_config,
     [[maybe_unused]] unsigned int max_attempts) {
     PuppyBootstrap::BootstrapResult result;
+#if SYRINGE_PATCH_BOOTSTRAP_SKIP && defined(PUPPY_SKIP_BOOTSTRAP)
+    log_warning(Puppies, "PUPPY_SKIP_BOOTSTRAP active: bypassing puppy bootstrap (returning minimal config)");
+    // Provide a minimal synthetic result reflecting requested single-tool dock if defined
+    result = minimal_config;
+    return result;
+#endif
+#if SYRINGE_PATCH_BOOTSTRAP_DIAG && defined(PUPPY_DIAG_BLINK)
+    // Simple diagnostic blink state machine:
+    //  - Fast blink during discovery attempts
+    //  - Slow blink after successful config acceptance before fingerprint stage
+    //  - Solid ON while flashing
+    //  - Triple quick pulses on fatal error (handled via fatal_error path not here)
+    // We use GPIOE pin 6 (same pin used for ERROR_LED in Marlin build flags) as a provisional LED.
+    static bool diag_led_inited = false;
+    auto diag_led_init = []() {
+        if (diag_led_inited) return;
+        __HAL_RCC_GPIOE_CLK_ENABLE();
+        GPIO_InitTypeDef GPIO_InitStruct{};
+        GPIO_InitStruct.Pin = GPIO_PIN_6; // PE6
+        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_6, GPIO_PIN_RESET);
+        diag_led_inited = true;
+    };
+    auto diag_led_fast_blink = []() {
+        static uint32_t last = 0;
+        uint32_t now = ticks_ms();
+        if (ticks_diff(last + 150, now) < 0) { // ~150ms toggle
+            HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_6);
+            last = now;
+        }
+    };
+    auto diag_led_slow_blink = []() {
+        static uint32_t last = 0;
+        uint32_t now = ticks_ms();
+        if (ticks_diff(last + 500, now) < 0) { // ~0.5s toggle
+            HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_6);
+            last = now;
+        }
+    };
+    auto diag_led_on = []() {
+        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_6, GPIO_PIN_SET);
+    };
+    auto diag_led_off = []() {
+        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_6, GPIO_PIN_RESET);
+    };
+    diag_led_init();
+#endif
 #if HAS_DWARF()
     progressHook({ 0, FlashingStage::START, PuppyType::DWARF });
 #elif HAS_PUPPY_MODULARBED()
@@ -110,16 +172,56 @@ PuppyBootstrap::BootstrapResult PuppyBootstrap::run(
     auto guard = buddy::puppies::PuppyBus::LockGuard();
 
 #if HAS_PUPPIES_BOOTLOADER()
+    unsigned int original_max_attempts = max_attempts;
+    log_info(Puppies, "Bootstrap entering run loop: minimal_config=0x%02x, max_attempts=%u", minimal_config.docks_preset, max_attempts);
     while (true) {
+        unsigned int attempt_number = (original_max_attempts - max_attempts) + 1;
+        log_info(Puppies, "Bootstrap attempt %u/%u starting", attempt_number, original_max_attempts);
+    #if SYRINGE_PATCH_BOOTSTRAP_DIAG && defined(PUPPY_DIAG_BLINK)
+        if (attempt_number == 1) {
+            // Enforced fast-blink phase: 3s total, 100ms period
+            uint32_t phase_start = ticks_ms();
+            bool state = false;
+            while (ticks_diff(phase_start + 3000, ticks_ms()) >= 0) {
+                state = !state;
+                HAL_GPIO_WritePin(GPIOE, GPIO_PIN_6, state ? GPIO_PIN_SET : GPIO_PIN_RESET);
+                osDelay(100);
+            }
+        } else {
+            // Minimal indication on subsequent attempts
+            HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_6);
+            osDelay(75);
+        }
+    #endif
         reset_all_puppies();
         result = run_address_assignment();
+        log_info(Puppies, "Address assignment result: discovered=%d, docks_preset=0x%02x", 
+                 result.discovered_num(), result.docks_preset);
         if (is_puppy_config_ok(result, minimal_config)) {
             // done, continue with bootstrap
+            log_info(Puppies, "Puppy config OK, continuing with bootstrap");
+            #if SYRINGE_PATCH_BOOTSTRAP_DIAG && defined(PUPPY_DIAG_BLINK)
+            // Enforced slow-blink phase: 3s total, 500ms period (acceptance indicator)
+            uint32_t slow_phase_start = ticks_ms();
+            bool state = false;
+            while (ticks_diff(slow_phase_start + 3000, ticks_ms()) >= 0) {
+                state = !state;
+                HAL_GPIO_WritePin(GPIOE, GPIO_PIN_6, state ? GPIO_PIN_SET : GPIO_PIN_RESET);
+                osDelay(500);
+            }
+            #endif
             break;
         } else {
             // inadequate puppy config, will try again
+            log_error(Puppies, "Puppy config NOT ok (have=0x%02x need=0x%02x) attempt %u", result.docks_preset, minimal_config.docks_preset, attempt_number);
+#if SYRINGE_PATCH_BOOTSTRAP_FORCE_ACCEPT && defined(PUPPY_FORCE_ACCEPT_AFTER_ATTEMPT)
+            if (attempt_number >= PUPPY_FORCE_ACCEPT_AFTER_ATTEMPT) {
+                log_warning(Puppies, "Forcing acceptance of current puppy config after %u attempts (diag mode)", attempt_number);
+                break; // Accept current result for diagnostic purposes
+            }
+#endif
             if (--max_attempts) {
-                log_error(Puppies, "Not enough puppies discovered, will try again");
+                log_error(Puppies, "Not enough puppies discovered, will try again (attempts left: %d)", max_attempts);
                 continue;
             } else {
     #if HAS_DWARF()
@@ -152,13 +254,30 @@ PuppyBootstrap::BootstrapResult PuppyBootstrap::run(
 
     // Select random salt for modular bed and for dwarf
     fingerprints_t fingerprints;
+    
+    // Salt sharing / isolation logic (gated for bisection)
+#if SYRINGE_PATCH_BOOTSTRAP_FP_SHARE
+  #ifdef FLASH_ONLY_DOCK
+    // Selective flashing + share patch active: give unique salt to every dock to avoid conflicts with mixed FW
+    for (const auto dock : DOCKS) { fingerprints.get_salt(dock) = rand_u(); }
+  #else
+    // Patch active: share salt across discovered DWARFs to speed fingerprint reuse
+    Dock reference_dwarf_dock = Dock::DWARF_1;
     for (const auto dock : DOCKS) {
-        if (to_puppy_type(dock) == DWARF && dock != Dock::DWARF_1) {
-            fingerprints.get_salt(dock) = fingerprints.get_salt(Dock::DWARF_1);
+        if (to_puppy_type(dock) == DWARF && result.is_dock_occupied(dock)) { reference_dwarf_dock = dock; break; }
+    }
+    for (const auto dock : DOCKS) {
+        if (to_puppy_type(dock) == DWARF && dock != reference_dwarf_dock) {
+            fingerprints.get_salt(dock) = fingerprints.get_salt(reference_dwarf_dock);
         } else {
             fingerprints.get_salt(dock) = rand_u();
         }
     }
+  #endif
+#else
+    // Patch disabled: always unique salt per dock (original conservative behavior)
+    for (const auto dock : DOCKS) { fingerprints.get_salt(dock) = rand_u(); }
+#endif
 
     // Ask puppies to compute fw fingerprint
     for (const auto dock : DOCKS) {
@@ -176,13 +295,38 @@ PuppyBootstrap::BootstrapResult PuppyBootstrap::run(
     // Precompute firmware fingerprints
     for (const auto dock : DOCKS) {
         const auto puppy_type = to_puppy_type(dock);
-        if (puppy_type == DWARF && dock != Dock::DWARF_1) {
-            fingerprints.get_fingerprint(dock) = fingerprints.get_fingerprint(Dock::DWARF_1);
+#ifdef FLASH_ONLY_DOCK
+        // In selective flashing mode, compute each dock's fingerprint independently
+        // since we may have mixed firmware versions
+        unique_file_ptr fw_file = get_firmware(puppy_type);
+        const off_t fw_size = get_firmware_size(puppy_type);
+        calculate_fingerprint(fw_file, fw_size, fingerprints.get_fingerprint(dock), fingerprints.get_salt(dock));
+// Non selective flashing path
+#else
+        #if SYRINGE_PATCH_BOOTSTRAP_FP_SHARE
+        // Patch enabled: share fingerprint between identical DWARFs
+        // Re-identify a reference dwarf for this phase (not relying on earlier scope)
+        static Dock reference_dwarf_dock_fp = Dock::DWARF_1;
+        if (dock == DOCKS.front()) { // first iteration heuristic to (re)compute reference
+            reference_dwarf_dock_fp = Dock::DWARF_1;
+            for (const auto d2 : DOCKS) {
+                if (to_puppy_type(d2) == DWARF && result.is_dock_occupied(d2)) { reference_dwarf_dock_fp = d2; break; }
+            }
+        }
+        if (puppy_type == DWARF && dock != reference_dwarf_dock_fp) {
+            fingerprints.get_fingerprint(dock) = fingerprints.get_fingerprint(reference_dwarf_dock_fp);
         } else {
             unique_file_ptr fw_file = get_firmware(puppy_type);
             const off_t fw_size = get_firmware_size(puppy_type);
             calculate_fingerprint(fw_file, fw_size, fingerprints.get_fingerprint(dock), fingerprints.get_salt(dock));
         }
+        #else
+        // Patch disabled: compute independent fingerprints for every dock
+        unique_file_ptr fw_file = get_firmware(puppy_type);
+        const off_t fw_size = get_firmware_size(puppy_type);
+        calculate_fingerprint(fw_file, fw_size, fingerprints.get_fingerprint(dock), fingerprints.get_salt(dock));
+        #endif
+#endif // FLASH_ONLY_DOCK
     }
     #endif /* PUPPY_FLASH_FW() */
 
@@ -206,6 +350,17 @@ PuppyBootstrap::BootstrapResult PuppyBootstrap::run(
     #endif /* !PUPPY_FLASH_FW() */
     }
 
+    // Build a compact list of discovered DWARFs to robustly distribute fingerprint chunks
+    Dock discovered_dwarfs[6];
+    uint8_t discovered_dwarfs_count = 0;
+    for (const auto dock : DOCKS) {
+        if (to_puppy_type(dock) == DWARF && result.is_dock_occupied(dock)) {
+            if (discovered_dwarfs_count < 6) {
+                discovered_dwarfs[discovered_dwarfs_count++] = dock;
+            }
+        }
+    }
+
     // Check fingerprints and flash firmware
     for (const auto dock : DOCKS) {
         if (!result.is_dock_occupied(dock)) {
@@ -220,14 +375,24 @@ PuppyBootstrap::BootstrapResult PuppyBootstrap::run(
 
         attempt_crash_dump_download(dock, address);
     #if PUPPY_FLASH_FW()
-        if (should_process_dock(dock)) {
+    if (should_process_dock(dock)) {
+        #if SYRINGE_PATCH_BOOTSTRAP_DIAG && defined(PUPPY_DIAG_BLINK)
+            // Solid ON during flashing operations for this dock
+            diag_led_on();
+        #endif
             uint8_t offset = 0;
             uint8_t size = sizeof(fingerprint_t);
         #if HAS_DWARF()
             if (to_puppy_type(dock) == DWARF) {
-                // Check this chunk from one puppy, -1 for modular bed which has different fingerprint
-                size = sizeof(fingerprint_t) / (result.discovered_num() - 1);
-                offset = size * (static_cast<uint8_t>(dock) - 1);
+                // Distribute fingerprint check across only the discovered DWARFs
+                const uint8_t denom = (discovered_dwarfs_count == 0) ? 1 : discovered_dwarfs_count;
+                size = sizeof(fingerprint_t) / denom;
+                // Find compact index of this dock among discovered dwarfs
+                uint8_t dwarf_index = 0;
+                for (uint8_t i = 0; i < discovered_dwarfs_count; ++i) {
+                    if (discovered_dwarfs[i] == dock) { dwarf_index = i; break; }
+                }
+                offset = size * dwarf_index;
             }
         #endif
             flash_firmware(dock, fingerprints, offset, size, percent_base, percent_per_puppy);
@@ -256,7 +421,11 @@ PuppyBootstrap::BootstrapResult PuppyBootstrap::run(
 
         auto address = get_boot_address_for_dock(dock);
         auto puppy_type = to_puppy_type(dock);
-        start_app(puppy_type, address, fingerprints.get_salt(dock), fingerprints.get_fingerprint(dock)); // Use last known salt that may already be calculated in puppy
+    start_app(puppy_type, address, fingerprints.get_salt(dock), fingerprints.get_fingerprint(dock)); // Use last known salt that may already be calculated in puppy
+    #if SYRINGE_PATCH_BOOTSTRAP_DIAG && defined(PUPPY_DIAG_BLINK)
+    // After starting apps turn LED OFF to signify completion of puppy bootstrap
+    diag_led_off();
+    #endif
     }
 
 #else
@@ -268,8 +437,29 @@ PuppyBootstrap::BootstrapResult PuppyBootstrap::run(
 }
 
 bool PuppyBootstrap::is_puppy_config_ok(PuppyBootstrap::BootstrapResult result, PuppyBootstrap::BootstrapResult minimal_config) {
-    // at least all bits that are set in minimal_config are set
-    return (result.docks_preset & minimal_config.docks_preset) == minimal_config.docks_preset;
+    // When SINGLE_TOOL_DOCK is defined, relax the modular bed requirement for single-tool setups
+#ifdef SINGLE_TOOL_DOCK
+    #if SYRINGE_PATCH_BOOTSTRAP_MODULAR_RELAX
+        // Relaxed single-tool mode: modular bed optional
+        uint8_t required_mask = minimal_config.docks_preset;
+        #if HAS_PUPPY_MODULARBED()
+            required_mask &= ~(1 << static_cast<uint8_t>(Dock::MODULAR_BED));
+        #endif
+        log_info(Puppies, "Single-tool (relaxed) check: result=0x%02x, minimal=0x%02x, required=0x%02x",
+                         result.docks_preset, minimal_config.docks_preset, required_mask);
+        return (result.docks_preset & required_mask) == required_mask;
+    #else
+        // Strict single-tool mode (baseline behavior): require original minimal_config bits
+        log_info(Puppies, "Single-tool (strict) check: result=0x%02x, minimal=0x%02x",
+                         result.docks_preset, minimal_config.docks_preset);
+        return (result.docks_preset & minimal_config.docks_preset) == minimal_config.docks_preset;
+    #endif
+#else
+        // Standard multi-tool mode (unchanged)
+        log_info(Puppies, "Standard config check: result=0x%02x, minimal=0x%02x",
+                         result.docks_preset, minimal_config.docks_preset);
+        return (result.docks_preset & minimal_config.docks_preset) == minimal_config.docks_preset;
+#endif
 }
 
 PuppyBootstrap::BootstrapResult PuppyBootstrap::run_address_assignment() {

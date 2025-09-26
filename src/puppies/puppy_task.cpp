@@ -230,6 +230,16 @@ static void puppy_task_body([[maybe_unused]] void const *argument) {
 
     // by default, we want one modular bed and one dwarf
     PuppyBootstrap::BootstrapResult minimal_puppy_config = PuppyBootstrap::MINIMAL_PUPPY_CONFIG;
+    
+#ifdef SINGLE_TOOL_DOCK
+    #include <option/syringe_patch_toggles.h>
+    #if SYRINGE_PATCH_BOOTSTRAP_MODULAR_RELAX
+        // In single-tool mode (relaxed), drop modular bed requirement for T4-only setups
+        #if HAS_PUPPY_MODULARBED()
+            minimal_puppy_config.docks_preset &= ~(1 << static_cast<uint8_t>(Dock::MODULAR_BED));
+        #endif
+    #endif
+#endif
 
     do {
         // reset and flash the puppies

@@ -12,6 +12,86 @@ project(
   VERSION ${PROJECT_VERSION}
   )
 
+# Diagnostic: ultra-early heartbeat toggle in main() before RTOS start
+option(EARLY_HEARTBEAT "Enable ultra-early GPIO heartbeat in main() before RTOS start" OFF)
+if(EARLY_HEARTBEAT)
+  add_compile_definitions(EARLY_HEARTBEAT)
+  message(STATUS "Diagnostic: EARLY_HEARTBEAT enabled")
+endif()
+
+# -----------------------------------------------------------------------------
+# Syringe patch macro options (used for bisection of custom single-tool changes)
+# Each option maps to a preprocessor define consumed by
+#   include/option/syringe_patch_toggles.h
+# By default they are OFF (baseline / stock behaviour).  Enabling an option
+# sets the corresponding SYRINGE_PATCH_* macro to 1 so code paths can be
+# selectively compiled for variant builds.
+# -----------------------------------------------------------------------------
+set(_SYRINGE_PATCH_LIST
+    SYRINGE_PATCH_ENTRY_HEARTBEAT
+    SYRINGE_PATCH_BOOTSTRAP_MODULAR_RELAX
+    SYRINGE_PATCH_BOOTSTRAP_FP_SHARE
+    SYRINGE_PATCH_BOOTSTRAP_SELECTIVE_FLASH
+    SYRINGE_PATCH_BOOTSTRAP_DIAG
+    SYRINGE_PATCH_BOOTSTRAP_FORCE_ACCEPT
+    SYRINGE_PATCH_BOOTSTRAP_SKIP
+    SYRINGE_PATCH_SINGLE_TOOL_MINIMAL
+  SYRINGE_PATCH_FAULT_LAMP
+)
+
+# Composite (meta) options enabling curated groups of patches for rapid variant building.
+# These do NOT define code directly; they toggle constituent SYRINGE_PATCH_* options below
+option(SYRINGE_PATCH_META_BASELINE "Meta: baseline (no patches)" OFF)
+option(SYRINGE_PATCH_META_DIAG_MIN "Meta: minimal diagnostics (heartbeat + diag blink)" OFF)
+option(SYRINGE_PATCH_META_BOOT_RELAX "Meta: relaxed bootstrap set (modular relax + fp share)" OFF)
+option(SYRINGE_PATCH_META_ALL_SAFE "Meta: all non-invasive patches" OFF)
+option(SYRINGE_PATCH_META_ALL "Meta: enable every syringe patch" OFF)
+
+# Resolve meta selections into individual patch options only if user hasn't explicitly set them.
+macro(_maybe_enable_patch _p)
+  if(NOT DEFINED ${_p})
+    set(${_p} ON CACHE BOOL "(auto from meta)" FORCE)
+  endif()
+endmacro()
+
+if(SYRINGE_PATCH_META_ALL)
+  foreach(_p ${_SYRINGE_PATCH_LIST})
+    _maybe_enable_patch(${_p})
+  endforeach()
+elseif(SYRINGE_PATCH_META_ALL_SAFE)
+  foreach(_p IN LISTS _SYRINGE_PATCH_LIST)
+    if(_p STREQUAL SYRINGE_PATCH_BOOTSTRAP_SKIP OR _p STREQUAL SYRINGE_PATCH_BOOTSTRAP_FORCE_ACCEPT)
+      # treat skip & force accept as invasive
+    else()
+      _maybe_enable_patch(${_p})
+    endif()
+  endforeach()
+endif()
+
+if(SYRINGE_PATCH_META_DIAG_MIN)
+  _maybe_enable_patch(SYRINGE_PATCH_ENTRY_HEARTBEAT)
+  _maybe_enable_patch(SYRINGE_PATCH_BOOTSTRAP_DIAG)
+endif()
+
+if(SYRINGE_PATCH_META_BOOT_RELAX)
+  _maybe_enable_patch(SYRINGE_PATCH_BOOTSTRAP_MODULAR_RELAX)
+  _maybe_enable_patch(SYRINGE_PATCH_BOOTSTRAP_FP_SHARE)
+endif()
+
+# Baseline meta is intentionally a no-op (acts as documentation / mutual exclusion token)
+
+foreach(_patch ${_SYRINGE_PATCH_LIST})
+  if(NOT DEFINED ${_patch})
+    # Create a BOOL cache option (OFF by default)
+    option(${_patch} "Enable syringe patch: ${_patch}" OFF)
+  endif()
+  if(${_patch})
+    add_compile_definitions(${_patch}=1)
+    message(STATUS "SyringePatch: ${_patch} enabled")
+  endif()
+endforeach()
+
+
 # Sets Python3_FIND_STRATEGY to "LOCATION"
 cmake_policy(SET CMP0094 NEW)
 

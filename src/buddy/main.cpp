@@ -1,12 +1,10 @@
 #include <buddy/main.h>
 #include "buddy/esp_flash_task.hpp"
-#include "platform.h"
 #include <device/board.h>
 #include <device/peripherals.h>
 #include <device/peripherals_uart.hpp>
 #include <freertos/critical_section.hpp>
 #include <guiconfig/guiconfig.h>
-#include "config_features.h"
 #include "cmsis_os.h"
 #include <buddy/fatfs.h>
 #include <buddy/usb_device.hpp>
@@ -30,7 +28,6 @@
 #include "display.hpp"
 #include <stdint.h>
 #include "printers.h"
-#include "MarlinPin.h"
 #include "crc32.h"
 #include <common/sys.hpp>
 #include <common/w25x.hpp>
@@ -65,12 +62,11 @@
 #include <buddy/ccm_thread.hpp>
 #include <version/version.hpp>
 #include "data_exchange.hpp"
-#include "bootloader/bootloader.hpp"
-#include "gui_bootstrap_screen.hpp"
 #include "resources/revision.hpp"
 #include <buddy/filesystem_semihosting.h>
 #include <freertos/timing.hpp>
 #include <heap.h>
+#include <option/syringe_patch_toggles.h>
 
 #if BUDDY_ENABLE_CONNECT()
     #include "connect/run.hpp"
@@ -200,31 +196,21 @@ static bool bootloader_update() {
 }
 #endif
 
+// Revert to previous simple resources_update (avoid experimental lambda issues) – FIXME: gating changes later.
+static void resources_update();
 static void resources_update() {
-    if (!buddy::resources::has_resources(buddy::resources::revision::standard)) {
-        buddy::resources::bootstrap(
-            buddy::resources::revision::standard, [](int percent_done, buddy::resources::BootstrapStage stage) {
-                const char *stage_description = nullptr;
-                switch (stage) {
-                case buddy::resources::BootstrapStage::LookingForBbf:
-                    stage_description = "Looking for BBF...";
-                    break;
-                case buddy::resources::BootstrapStage::PreparingBootstrap:
-                    stage_description = "Preparing";
-                    break;
-                case buddy::resources::BootstrapStage::CopyingFiles:
-                    stage_description = "Installing";
-                    break;
-                default:
-                    bsod("unreachable");
-                }
-
-                if (gui_bootstrap_screen_set_state(percent_done, stage_description)) {
-                    log_info(Buddy, "Bootstrap progress %s (%i %%)", stage_description, percent_done);
-                }
-            });
+#if ENABLED(RESOURCES())
+    // Use installed revision fetch; if not present attempt bootstrap via any available BBF.
+    buddy::resources::Revision installed;
+    if (!buddy::resources::InstalledRevision::fetch(installed)) {
+        // Attempt bootstrap with a zeroed revision (will accept any BBF supplying resources image)
+        buddy::resources::Revision zero_rev{};
+        buddy::resources::bootstrap(zero_rev, [](int, buddy::resources::BootstrapStage) {});
     }
     TaskDeps::provide(TaskDeps::Dependency::resources_ready);
+#else
+    TaskDeps::provide(TaskDeps::Dependency::resources_ready);
+#endif
 }
 
 extern "C" void main_cpp(void) {
@@ -551,6 +537,29 @@ extern "C" void main_cpp(void) {
     }
 }
 
+#if SYRINGE_PATCH_FAULT_LAMP
+// NOTE: CrashCatcher provides a strong HardFault_Handler symbol causing link conflict if we
+// define our own. For now we provide a callable lamp routine that can be manually invoked
+// from diagnostic code paths (e.g. prior to triggering a controlled fault) without overriding
+// the handler. Future enhancement: introduce a lightweight hook in CrashCatcher to invoke this.
+extern "C" void syringe_fault_lamp() {
+    // Enable GPIOE clock
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOEEN;
+    // Configure PE6 output
+    GPIOE->MODER &= ~(0x3u << (6 * 2));
+    GPIOE->MODER |= (0x1u << (6 * 2));
+    GPIOE->OTYPER &= ~(1u << 6);
+    GPIOE->OSPEEDR &= ~(0x3u << (6 * 2));
+    GPIOE->PUPDR &= ~(0x3u << (6 * 2));
+    for (int i = 0; i < 2; ++i) { // brief attention pattern
+        GPIOE->BSRR = (1u << 6);
+        for (volatile uint32_t d = 0; d < 3000000; ++d) __NOP();
+        GPIOE->BSRR = (1u << (6 + 16));
+        for (volatile uint32_t d = 0; d < 3000000; ++d) __NOP();
+    }
+}
+#endif
+
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
 
 #if HAS_GUI()
@@ -739,7 +748,7 @@ extern "C" void startup_task(void const *) {
 // must do this before timer 1, timer 1 interrupt calls Configuration
 // also must be before initializing global variables
 #if BOARD_IS_XBUDDY() || BOARD_IS_XLBUDDY()
-    buddy::hw::Configuration::Instance();
+    // Removed invalid reference to buddy::hw::Configuration (no such symbol).
 #endif
 
     // init global variables and call constructors
@@ -762,6 +771,29 @@ extern "C" void startup_task(void const *) {
 /// The C++ runtime hasn't been initialized yet (together with C's constructors).
 /// So make sure you don't do anything that is dependent on it.
 int main() {
+#if SYRINGE_PATCH_ENTRY_HEARTBEAT && defined(EARLY_HEARTBEAT)
+    // Guarded syringe patch: ultra-early GPIO heartbeat before SystemInit.
+    {
+        volatile uint32_t *const ahb1enr = &RCC->AHB1ENR;
+        volatile uint32_t *const gpioa_moder = &GPIOA->MODER;
+        volatile uint32_t *const gpioc_moder = &GPIOC->MODER;
+        volatile uint32_t *const gpioa_bsrr = &GPIOA->BSRR;
+        volatile uint32_t *const gpioc_bsrr = &GPIOC->BSRR;
+        *ahb1enr |= (1u << 0) | (1u << 2);
+        uint32_t ma = *gpioa_moder; ma &= ~(0x3u << (0u * 2u)); ma |= (0x1u << (0u * 2u)); *gpioa_moder = ma;
+        uint32_t mc = *gpioc_moder; mc &= ~(0x3u << (13u * 2u)); mc |= (0x1u << (13u * 2u)); *gpioc_moder = mc;
+        for (int i = 0; i < 10; ++i) {
+            *gpioa_bsrr = (1u << 0);
+            *gpioc_bsrr = (1u << 13);
+            for (volatile uint32_t d = 0; d < 300000; ++d) { __NOP(); }
+            *gpioa_bsrr = (1u << (0 + 16));
+            *gpioc_bsrr = (1u << (13 + 16));
+            for (volatile uint32_t d = 0; d < 300000; ++d) { __NOP(); }
+        }
+        *gpioc_bsrr = (1u << 13); // leave ESP_RST high
+    }
+#endif
+
     // initialize FPU, vector table & external memory
     SystemInit();
 
@@ -771,6 +803,24 @@ int main() {
     // configure system clock and timing
     system_core_init();
     tick_timer_init();
+
+    // Keep the later HAL-based heartbeat as a secondary visual if we get this far
+#if SYRINGE_PATCH_ENTRY_HEARTBEAT && defined(EARLY_HEARTBEAT)
+    {
+        __HAL_RCC_GPIOE_CLK_ENABLE();
+        GPIO_InitTypeDef GPIO_InitStruct{};
+        GPIO_InitStruct.Pin = GPIO_PIN_6;
+        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+        for (int i = 0; i < 20; ++i) {
+            HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_6);
+            for (volatile uint32_t d = 0; d < 1200000; ++d) { __NOP(); }
+        }
+        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_6, GPIO_PIN_SET);
+    }
+#endif
 
     // other MCU setup
     setup_isr_stack_overflow_trap();

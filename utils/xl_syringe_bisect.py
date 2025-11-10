@@ -1,31 +1,12 @@
 #!/usr/bin/env python3
-"""XL Syringe Patch Bisection Helper
+# Bisect script for isolating XL syringe T4 firmware bugs through controlled patch toggling.
+# Produces variants (B0=baseline, B1=all, B2A/B2B/B2C=groups) to narrow down boot failures.
 
-Generates firmware variant builds with controlled sets of SYRINGE_PATCH_* toggles
-and logs test outcomes to a CSV. Wraps utils/build.py so we stay aligned with
-standard build flow.
-
-Variants (initial set):
-    B0   Baseline (all syringe patches OFF, no SINGLE_TOOL_DOCK by default)
-  B1   Full set (all syringe patches ON)
-  B2A  Core bootstrap group (entry heartbeat + selective flash + fp share + modular relax)
-  B2B  Diagnostic & acceptance group (diag blink + force accept + skip bootstrap)
-Additional drill-down sequences can be specified with --sequence.
-
-Usage examples:
-  ./utils/xl_syringe_bisect.py init-log
-  ./utils/xl_syringe_bisect.py build               # builds default sequence B0,B1,B2A,B2B
-  ./utils/xl_syringe_bisect.py build --sequence B3A1 B3A2
-  ./utils/xl_syringe_bisect.py log --variant B2A --boots N --progress 50 --usb N --stall 8 --notes "Stalls mid bar"
-
-Exit codes: non-zero on failed subprocess builds.
-"""
-from __future__ import annotations
 import argparse
-import csv
 import subprocess
 import sys
 import shutil
+import csv
 from pathlib import Path
 from datetime import datetime
 
@@ -37,6 +18,7 @@ LOG_PATH = REPO_ROOT / 'dist' / 'xl_syringe_bisect_log.csv'
 # Common baseline cmake defs always applied (can be extended later)
 COMMON_DEFS = [
     ('BOOTLOADER','STRING','YES'),   # include bootloader binary for production-like builds
+    ('BOOTLOADER_UPDATE','BOOL','ON'),  # include bootloader in BBF resources (needed for 4.1M size)
 ]
 
 # Patch macro names for convenience
@@ -78,24 +60,9 @@ SEQUENCES = {
 CSV_HEADER = ['Timestamp','Variant','GitHash','Boots','Progress%','USB','TimeToStall_s','Notes']
 
 def git_hash_short() -> str:
-    try:
-        return subprocess.check_output(['git','rev-parse','--short','HEAD'], cwd=REPO_ROOT).decode().strip()
-    except Exception:
-        return 'unknown'
-
-def ensure_log():
-    PRODUCTS_DIR.mkdir(parents=True, exist_ok=True)
-    if not LOG_PATH.exists():
-        with open(LOG_PATH,'w',newline='') as f:
-            csv.writer(f).writerow(CSV_HEADER)
-
-def append_log_row(variant, boots, progress, usb, stall, notes):
-    ensure_log()
-    with open(LOG_PATH,'a',newline='') as f:
-        csv.writer(f).writerow([
-            datetime.utcnow().isoformat(timespec='seconds'),
-            variant, git_hash_short(), boots, progress, usb, stall, notes
-        ])
+    """Return short 9-char git hash (for artifact naming)"""
+    r = subprocess.run(['git','rev-parse','--short=9','HEAD'], cwd=REPO_ROOT, capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else 'unknown'
 
 def build_variant(variant: str, single_tool_dock: int|None, extra_cmake: list[str], store_output: bool, enable_meta: str|None, matrix: bool, clean: bool):
     if variant not in VARIANTS:
@@ -134,7 +101,7 @@ def build_variant(variant: str, single_tool_dock: int|None, extra_cmake: list[st
     cmake_defs.extend(extra_cmake)
 
     # Prepare command
-    cmd = [sys.executable, str(BUILD_SCRIPT), '--preset','xl','--build-type','release','--bootloader','no','--no-store-output']
+    cmd = [sys.executable, str(BUILD_SCRIPT), '--preset','xl','--build-type','release','--bootloader','yes','--no-store-output']
     for d in cmake_defs:
         cmd += ['--cmake-def', d]
 
@@ -142,7 +109,7 @@ def build_variant(variant: str, single_tool_dock: int|None, extra_cmake: list[st
     print(f'   CMake defs: {cmake_defs}')
 
     # Optional clean to avoid CMake cache contamination leaking diagnostic options
-    build_dir = REPO_ROOT / 'build' / 'xl_release_noboot'
+    build_dir = REPO_ROOT / 'build' / 'xl_release_boot'
     if clean and build_dir.exists():
         print(f'   Cleaning build directory: {build_dir}')
         shutil.rmtree(build_dir, ignore_errors=True)
@@ -151,10 +118,10 @@ def build_variant(variant: str, single_tool_dock: int|None, extra_cmake: list[st
         raise SystemExit(f'Build failed for variant {variant}')
 
     # Locate produced firmware
-    # build directory naming from build.py -> build/xl_release_noboot
-    produced_bin = REPO_ROOT / 'build' / 'xl_release_noboot' / 'firmware.bbf'
+    # build directory naming from build.py -> build/xl_release_boot (with bootloader)
+    produced_bin = REPO_ROOT / 'build' / 'xl_release_boot' / 'firmware.bbf'
     if not produced_bin.exists():
-        produced_bin = REPO_ROOT / 'build' / 'xl_release_noboot' / 'firmware.bin'
+        produced_bin = REPO_ROOT / 'build' / 'xl_release_boot' / 'firmware.bin'
     if not produced_bin.exists():
         print(f'WARNING: firmware for {variant} not found')
         return
@@ -182,62 +149,67 @@ def cmd_build(args):
         atomic_sets = [(k,{k}) for k in PATCHES.keys()]
         accum = set()
         growth = []
-        for k in PATCHES.keys():
-            accum.add(k)
-            growth.append(('ACC_'+k, set(accum)))
-        gen = atomic_sets + growth
-        for name, enabled in gen:
-            VARIANTS[name] = enabled
-            build_variant(name, args.single_tool_dock, args.cmake_def or [], args.store_output, args.meta, matrix=True, clean=args.clean)
+        for k in sorted(PATCHES.keys()):
+            accum = accum | {k}
+            growth.append((f'M{len(accum)}',accum.copy()))
+        sequence_sets = atomic_sets + growth
     else:
-        for v in sequence:
-            build_variant(v, args.single_tool_dock, args.cmake_def or [], args.store_output, args.meta, matrix=False, clean=args.clean)
+        sequence_sets = [(v,VARIANTS[v]) for v in sequence]
 
-
-def cmd_init_log(_args):
-    ensure_log()
-    print(f'Log initialized at {LOG_PATH}')
-    if LOG_PATH.exists():
-        print(LOG_PATH.read_text())
+    for var, enabled in sequence_sets:
+        build_variant(var, args.single_tool_dock, args.cmake_def, args.store_output, args.enable_meta, args.matrix, args.clean)
 
 
 def cmd_log(args):
-    append_log_row(args.variant, args.boots, args.progress, args.usb, args.stall, args.notes)
-    print('Logged result.')
-
-
-def parse_args():
-    p = argparse.ArgumentParser(description='XL Syringe bisection build helper')
-    sub = p.add_subparsers(dest='command', required=True)
-
-    b = sub.add_parser('build', help='Build one or more variants')
-    b.add_argument('--sequence', nargs='*', help='Variant IDs or a named sequence (default, atomic)')
-    b.add_argument('--single-tool-dock', type=int, default=None, help='SINGLE_TOOL_DOCK value. Omit for default behaviour (none for B0, 5 for others). Use -1 to force disable for all variants.')
-    b.add_argument('--cmake-def', action='append', help='Extra raw cmake cache entries (NAME:TYPE=VALUE)')
-    b.add_argument('--store-output', action='store_true', help='Store build stdout/stderr to files')
-    b.add_argument('--meta', choices=['SYRINGE_PATCH_META_DIAG_MIN','SYRINGE_PATCH_META_BOOT_RELAX','SYRINGE_PATCH_META_ALL_SAFE','SYRINGE_PATCH_META_ALL'], help='Enable a meta patch set instead of explicit mappings')
-    b.add_argument('--matrix', action='store_true', help='Generate atomic and cumulative patch build matrix (ignores --sequence explicit variant enabling)')
-    b.add_argument('--clean', action='store_true', help='Delete existing build/xl_release_noboot before each variant to avoid cache contamination')
-    b.set_defaults(func=cmd_build)
-
-    l = sub.add_parser('log', help='Append a test result row to CSV')
-    l.add_argument('--variant', required=True)
-    l.add_argument('--boots', required=True, choices=['Y','N'])
-    l.add_argument('--progress', required=True, help='Observed progress percent or ?')
-    l.add_argument('--usb', required=True, choices=['Y','N','?'])
-    l.add_argument('--stall', required=True, help='Seconds to stall or -')
-    l.add_argument('--notes', default='')
-    l.set_defaults(func=cmd_log)
-
-    il = sub.add_parser('init-log', help='Create (or print) the CSV log header')
-    il.set_defaults(func=cmd_init_log)
-
-    return p.parse_args()
+    """Append test result to CSV log for tracking bisect progress"""
+    PRODUCTS_DIR.mkdir(exist_ok=True)
+    file_exists = LOG_PATH.exists()
+    with open(LOG_PATH, 'a', newline='') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(CSV_HEADER)
+        writer.writerow([
+            datetime.now().isoformat(),
+            args.variant,
+            git_hash_short(),
+            args.boots,
+            args.progress,
+            args.usb or '',
+            args.time_to_stall or '',
+            args.notes or '',
+        ])
+    print(f'Logged result for variant {args.variant}: boots={args.boots}, progress={args.progress}%')
 
 
 def main():
-    args = parse_args()
-    args.func(args)
+    parser = argparse.ArgumentParser(description='Build XL syringe bisect variants to isolate boot issues.')
+    subs = parser.add_subparsers(dest='command', required=True)
+
+    # Build subcommand
+    build_parser = subs.add_parser('build', help='Build one or more firmware variants')
+    build_parser.add_argument('--sequence', nargs='+', metavar='VARIANT', help='Variant IDs or named sequence (default, atomic). Omit for default.')
+    build_parser.add_argument('--single-tool-dock', type=int, metavar='N', help='Set SINGLE_TOOL_DOCK to N (5=default for variants, omit for B0; use -1 to force disable)')
+    build_parser.add_argument('--cmake-def', action='append', default=[], metavar='KEY:TYPE=VALUE', help='Extra CMake cache variable(s)')
+    build_parser.add_argument('--store-output', action='store_true', help='Store intermediate build output (disabled by default)')
+    build_parser.add_argument('--enable-meta', metavar='META_FLAG', help='Enable a meta diagnostic flag (e.g. SYRINGE_DEBUG_ALL)')
+    build_parser.add_argument('--matrix', action='store_true', help='Build atomic + cumulative matrix (ignores sequence)')
+    build_parser.add_argument('--clean', action='store_true', help='Clean build directory before build')
+
+    # Log subcommand
+    log_parser = subs.add_parser('log', help='Log a test result to CSV')
+    log_parser.add_argument('--variant', required=True, help='Variant ID tested')
+    log_parser.add_argument('--boots', required=True, choices=['Y','N','P'], help='Y=boots OK, N=no boot, P=partial')
+    log_parser.add_argument('--progress', type=int, help='Bootloader progress %% at stall (if stalled)')
+    log_parser.add_argument('--usb', help='USB connection status')
+    log_parser.add_argument('--time-to-stall', type=float, help='Seconds until stall')
+    log_parser.add_argument('--notes', help='Freeform observation notes')
+
+    args = parser.parse_args()
+    if args.command == 'build':
+        cmd_build(args)
+    elif args.command == 'log':
+        cmd_log(args)
+
 
 if __name__ == '__main__':
     main()

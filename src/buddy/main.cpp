@@ -79,6 +79,10 @@
     #include "resources/bootstrap.hpp"
     #include "resources/revision_standard.hpp"
 #endif
+#if ENABLED(BOOTLOADER_UPDATE())
+    #include <bootloader/bootloader.hpp>
+    #include "gui_bootstrap_screen.hpp"
+#endif
 
 #if ENABLED(POWER_PANIC)
     #include "power_panic.hpp"

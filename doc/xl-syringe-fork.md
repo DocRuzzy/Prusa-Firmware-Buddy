@@ -28,20 +28,26 @@ Bootstrap (once per machine):
 python3 utils/bootstrap.py
 ```
 
+**IMPORTANT: Bootloader Configuration**
+- **Always use `--bootloader yes`** for production firmware builds that will be flashed via USB
+- The bootloader binary must be included in the .bbf package for the printer's bootloader to properly load the firmware
+- Using `--bootloader no` produces smaller builds but they **will not boot** on hardware (stalls at ~50% bootloader progress)
+- This is independent of whether you want to update the bootloader itself; the binary is needed for the loading mechanism
+
 Build DWARF with relaxed warm-up using the preset:
-- Release, no bootloader:
+- Release (with bootloader - REQUIRED for hardware):
 ```bash
 python3 utils/build.py \
   --preset xl-dwarf-syringe \
   --build-type release \
-  --bootloader no
+  --bootloader yes
 ```
 - Debug (for tracing):
 ```bash
 python3 utils/build.py \
   --preset xl-dwarf-syringe \
   --build-type debug \
-  --bootloader no
+  --bootloader yes
 ```
 Artifacts are written under `build/` and `build/products/`.
 
@@ -138,7 +144,7 @@ Example A: flash only T4 (extruder 5 / `DWARF_5`) using the new preset:
 python3 utils/build.py \
   --preset xl-syringe-t4 \
   --build-type release \
-  --bootloader no
+  --bootloader yes
 ```
 
 Note: Build the DWARF firmware first using `--preset xl-dwarf-syringe` so `build-vscode-dwarf` contains the toolhead binary that Buddy will embed.
@@ -149,7 +155,7 @@ Example B: the equivalent explicit flags (if not using the preset):
 python3 utils/build.py \
   --preset xl \
   --build-type release \
-  --bootloader no \
+  --bootloader yes \
   -D SYRINGE_RELAX_HEATUP:BOOL=ON \
   -D SYRINGE_WATCH_TEMP_PERIOD:STRING=300 \
   -D SYRINGE_WATCH_TEMP_INCREASE:STRING=2 \
@@ -170,7 +176,7 @@ You can override which DWARF dock is considered the minimal required single-tool
 python3 utils/build.py \
   --preset xl \
   --build-type release \
-  --bootloader no \
+  --bootloader yes \
   -D FLASH_ONLY_DOCK:STRING=5 \
   -D SINGLE_TOOL_DOCK:STRING=5
 ```
@@ -184,10 +190,38 @@ Notes
 
 Once you have built a release Buddy image with the `xl-syringe-t4` preset, you can flash it from USB like any stock update:
 
-1) Copy `build/products/xl-syringe-t4_release_noboot.bbf` to the root of a FAT32 USB stick.
+1) Copy `build/products/xl-syringe-t4_release_boot.bbf` to the root of a FAT32 USB stick.
 2) Insert the USB stick into the XL.
 3) On the printer, go to System > Firmware Update and select the `.bbf` file.
 4) The Buddy will reboot and apply the update. On first boot after the update, only dock 5 (T4) will be flashed (other docks are skipped).
 5) After the update completes, verify the version string (System > About) and confirm the DWARF on T4 reports the expected fingerprint.
 
 Tip: you can optionally package the `.bbf` and a checksum using `utils/package_release.py` to prepare uploadable assets for a GitHub Release.
+
+## Troubleshooting: Bootloader Issues
+
+### Problem: Firmware stalls at 50% bootloader progress
+
+**Symptom**: After flashing a custom .bbf via USB, the printer displays "Updating firmware" but stalls at approximately 50% progress on the bootloader screen. The printer never completes the boot sequence.
+
+**Root Cause**: The .bbf file was built **without the bootloader binary** (using `--bootloader no` or `BOOTLOADER_UPDATE=OFF`). The printer's bootloader requires the bootloader binary to be present in the firmware package to properly load and execute the main firmware.
+
+**Solution**: Rebuild with `--bootloader yes` flag:
+```bash
+python3 utils/build.py \
+  --preset xl-syringe-t4 \
+  --build-type release \
+  --bootloader yes
+```
+
+**Verification**: 
+- Correct .bbf size: ~4.1M (includes bootloader binary)
+- Incorrect .bbf size: ~3.9M (missing bootloader binary)
+- File naming: `*_boot.bbf` = has bootloader, `*_noboot.bbf` = missing bootloader
+
+**Why this matters**:
+- `--bootloader yes`: Sets `BOOTLOADER=YES` (firmware expects bootloader in memory layout) AND `BOOTLOADER_UPDATE=ON` (includes bootloader binary in .bbf)
+- `--bootloader no`: Sets `BOOTLOADER=NO` (firmware for standalone/development) - incompatible with production printers
+- The bootloader binary (~128KB) is needed by the printer's bootloader to load the firmware, regardless of whether you intend to update the bootloader itself
+
+**Historical Note**: Earlier builds used `--bootloader no` under the assumption it was only needed when updating the bootloader itself, and to avoid inadvertently flashing all connected puppies. However, testing revealed that the bootloader binary is **required for the firmware to boot at all** - without it, the printer cannot complete the boot sequence. The correct approach for selective puppy flashing is to use `FLASH_ONLY_DOCK` while keeping `--bootloader yes`.

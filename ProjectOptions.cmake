@@ -796,3 +796,30 @@ set(MDNS
     CACHE BOOL "Enable MDNS responder"
     )
 define_boolean_option(MDNS ${MDNS})
+
+#
+# Syringe Toolhead Options
+#
+# These options enable relaxed heating watchdog timings for slow-heating syringe toolheads on DWARF.
+# See doc/xl-syringe-fork.md for detailed explanation of thermal protection mechanisms.
+#
+set(SYRINGE_RELAX_HEATUP_DWARF
+    "NO"
+    CACHE BOOL "Enable relaxed heating watchdog for DWARF syringe toolhead"
+    )
+define_boolean_option(SYRINGE_RELAX_HEATUP_DWARF ${SYRINGE_RELAX_HEATUP_DWARF})
+
+set(SYRINGE_DWARF_WATCH_TEMP_PERIOD
+    "300"
+    CACHE STRING "DWARF heating progress check period in seconds (default 300)"
+    )
+
+set(SYRINGE_DWARF_WATCH_TEMP_INCREASE
+    "1"
+    CACHE STRING "DWARF minimum temperature rise in degrees C (default 1)"
+    )
+
+set(SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD
+    "300"
+    CACHE STRING "DWARF thermal runaway detection period in seconds (default 300)"
+    )

@@ -800,26 +800,28 @@ define_boolean_option(MDNS ${MDNS})
 #
 # Syringe Toolhead Options
 #
-# These options enable relaxed heating watchdog timings for slow-heating syringe toolheads on DWARF.
-# See doc/xl-syringe-fork.md for detailed explanation of thermal protection mechanisms.
+# These options enable relaxed heating watchdog timings for slow-heating syringe toolhead on T4
+# ONLY. T0-T3 and T5 maintain standard thermal protection. Buddy board applies different thermal
+# protection based on tool number. See doc/xl-syringe-fork.md for detailed explanation of thermal
+# protection mechanisms.
 #
-set(SYRINGE_RELAX_HEATUP_DWARF
+set(SYRINGE_RELAX_HEATUP_T4_ONLY
     "NO"
-    CACHE BOOL "Enable relaxed heating watchdog for DWARF syringe toolhead"
+    CACHE BOOL "Enable relaxed heating watchdog for T4 (extruder 4) syringe toolhead only"
     )
-define_boolean_option(SYRINGE_RELAX_HEATUP_DWARF ${SYRINGE_RELAX_HEATUP_DWARF})
+define_boolean_option(SYRINGE_RELAX_HEATUP_T4_ONLY ${SYRINGE_RELAX_HEATUP_T4_ONLY})
 
-set(SYRINGE_DWARF_WATCH_TEMP_PERIOD
+set(SYRINGE_WATCH_TEMP_PERIOD
     "300"
-    CACHE STRING "DWARF heating progress check period in seconds (default 300)"
+    CACHE STRING "T4 heating progress check period in seconds (default 300)"
     )
 
-set(SYRINGE_DWARF_WATCH_TEMP_INCREASE
+set(SYRINGE_WATCH_TEMP_INCREASE
     "1"
-    CACHE STRING "DWARF minimum temperature rise in degrees C (default 1)"
+    CACHE STRING "T4 minimum temperature rise in degrees C (default 1)"
     )
 
-set(SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD
+set(SYRINGE_THERMAL_PROTECTION_PERIOD
     "300"
-    CACHE STRING "DWARF thermal runaway detection period in seconds (default 300)"
+    CACHE STRING "T4 thermal runaway detection period in seconds (default 300)"
     )

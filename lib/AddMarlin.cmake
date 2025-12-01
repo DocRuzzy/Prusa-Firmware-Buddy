@@ -254,13 +254,13 @@ if(HAS_XBUDDY_EXTENSION)
   target_link_libraries(Marlin PUBLIC XBuddyExtensionShared)
 endif()
 
-# Forward syringe options to Marlin preprocessor for DWARF builds
-if(SYRINGE_RELAX_HEATUP_DWARF)
+# Forward syringe options to Marlin preprocessor for T4-only mode Buddy board checks tool number at
+# runtime and applies appropriate thermal protection
+if(SYRINGE_RELAX_HEATUP_T4_ONLY)
   target_compile_definitions(
     Marlin
-    PUBLIC SYRINGE_RELAX_HEATUP_DWARF=1
-           SYRINGE_DWARF_WATCH_TEMP_PERIOD=${SYRINGE_DWARF_WATCH_TEMP_PERIOD}
-           SYRINGE_DWARF_WATCH_TEMP_INCREASE=${SYRINGE_DWARF_WATCH_TEMP_INCREASE}
-           SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD=${SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD}
+    PUBLIC SYRINGE_RELAX_HEATUP_T4_ONLY=1 SYRINGE_WATCH_TEMP_PERIOD=${SYRINGE_WATCH_TEMP_PERIOD}
+           SYRINGE_WATCH_TEMP_INCREASE=${SYRINGE_WATCH_TEMP_INCREASE}
+           SYRINGE_THERMAL_PROTECTION_PERIOD=${SYRINGE_THERMAL_PROTECTION_PERIOD}
     )
 endif()

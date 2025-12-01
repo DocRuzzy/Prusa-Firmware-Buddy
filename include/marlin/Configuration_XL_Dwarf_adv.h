@@ -61,7 +61,15 @@
  * THERMAL_PROTECTION_HYSTERESIS and/or THERMAL_PROTECTION_PERIOD
  */
 #if ENABLED(THERMAL_PROTECTION_HOTENDS)
-    #define THERMAL_PROTECTION_PERIOD 20        // Seconds
+    // Syringe toolhead support: Allow CMake to override thermal protection period for slow heating
+    #if defined(SYRINGE_RELAX_HEATUP_DWARF) && (SYRINGE_RELAX_HEATUP_DWARF)
+        #ifndef SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD
+            #define SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD 300
+        #endif
+        #define THERMAL_PROTECTION_PERIOD SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD
+    #else
+        #define THERMAL_PROTECTION_PERIOD 20        // Seconds (default for standard hotend)
+    #endif
     #define THERMAL_PROTECTION_HYSTERESIS 6 //4     // Degrees Celsius
     #if ENABLED(MODEL_DETECT_STUCK_THERMISTOR)
         /**
@@ -96,8 +104,20 @@
    * and/or decrease WATCH_TEMP_INCREASE. WATCH_TEMP_INCREASE should not be set
    * below 2.
    */
-    #define WATCH_TEMP_PERIOD 20 // Seconds
-    #define WATCH_TEMP_INCREASE 2 // Degrees Celsius
+    // Syringe toolhead support: Allow CMake to override heating progress watchdog for slow heating
+    #if defined(SYRINGE_RELAX_HEATUP_DWARF) && (SYRINGE_RELAX_HEATUP_DWARF)
+        #ifndef SYRINGE_DWARF_WATCH_TEMP_PERIOD
+            #define SYRINGE_DWARF_WATCH_TEMP_PERIOD 300
+        #endif
+        #ifndef SYRINGE_DWARF_WATCH_TEMP_INCREASE
+            #define SYRINGE_DWARF_WATCH_TEMP_INCREASE 1
+        #endif
+        #define WATCH_TEMP_PERIOD SYRINGE_DWARF_WATCH_TEMP_PERIOD
+        #define WATCH_TEMP_INCREASE SYRINGE_DWARF_WATCH_TEMP_INCREASE
+    #else
+        #define WATCH_TEMP_PERIOD 20 // Seconds (default for standard hotend)
+        #define WATCH_TEMP_INCREASE 2 // Degrees Celsius
+    #endif
 #endif
 
 /**

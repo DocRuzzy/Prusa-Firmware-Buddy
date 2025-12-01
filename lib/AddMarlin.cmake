@@ -253,3 +253,14 @@ target_link_libraries(Marlin PRIVATE CppStdExtensions logging freertos)
 if(HAS_XBUDDY_EXTENSION)
   target_link_libraries(Marlin PUBLIC XBuddyExtensionShared)
 endif()
+
+# Forward syringe options to Marlin preprocessor for DWARF builds
+if(SYRINGE_RELAX_HEATUP_DWARF)
+  target_compile_definitions(
+    Marlin
+    PUBLIC SYRINGE_RELAX_HEATUP_DWARF=1
+           SYRINGE_DWARF_WATCH_TEMP_PERIOD=${SYRINGE_DWARF_WATCH_TEMP_PERIOD}
+           SYRINGE_DWARF_WATCH_TEMP_INCREASE=${SYRINGE_DWARF_WATCH_TEMP_INCREASE}
+           SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD=${SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD}
+    )
+endif()

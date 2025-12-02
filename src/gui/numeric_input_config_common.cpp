@@ -13,7 +13,11 @@ const NumericInputConfig numeric_input_config::nozzle_temperature = {
 };
 
 const NumericInputConfig numeric_input_config::filament_nozzle_temperature = {
+#if defined(FILAMENT_CUSTOM_NOZZLE_MIN_TEMP)
+    .min_value = FILAMENT_CUSTOM_NOZZLE_MIN_TEMP,
+#else
     .min_value = EXTRUDE_MINTEMP,
+#endif
     .max_value = HEATER_0_MAXTEMP - HEATER_MAXTEMP_SAFETY_MARGIN,
     .unit = Unit::celsius,
 };

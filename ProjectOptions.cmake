@@ -823,3 +823,14 @@ set(SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD
     "300"
     CACHE STRING "DWARF thermal runaway detection period in seconds (default 300)"
     )
+
+# ---------------------------------------------------------------------------
+# UI Tweaks: Filament nozzle temperature limits
+# ---------------------------------------------------------------------------
+# Minimum nozzle temperature allowed in the Custom Filament UI. Defaults to Marlin's EXTRUDE_MINTEMP
+# unless overridden here. Set to 20 to allow very low-temperature custom materials (e.g., syringe
+# liquids) without relaxing Marlin's cold-extrusion safety globally.
+set(FILAMENT_CUSTOM_NOZZLE_MIN_TEMP
+    ""
+    CACHE STRING "Minimum nozzle temp (°C) in Custom Filament UI (empty = use EXTRUDE_MINTEMP)"
+    )

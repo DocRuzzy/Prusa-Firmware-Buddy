@@ -462,6 +462,13 @@ target_compile_options(
           -Wdouble-promotion
   )
 
+# Pass UI min nozzle temp for custom filaments (if configured)
+if(FILAMENT_CUSTOM_NOZZLE_MIN_TEMP)
+  target_compile_definitions(
+    firmware PUBLIC FILAMENT_CUSTOM_NOZZLE_MIN_TEMP=${FILAMENT_CUSTOM_NOZZLE_MIN_TEMP}
+    )
+endif()
+
 if(ENABLE_HW_STD_RAND)
   # Wrap rand and replace the implementation with one using HW RNG
   target_link_options(firmware PUBLIC -Wl,--wrap=rand)

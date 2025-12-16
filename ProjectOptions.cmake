@@ -823,3 +823,37 @@ set(SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD
     "300"
     CACHE STRING "DWARF thermal runaway detection period in seconds (default 300)"
     )
+
+# Syringe Buddy-side (T4-only) relax options
+set(SYRINGE_RELAX_HEATUP_T4_ONLY
+    "NO"
+    CACHE BOOL "Enable relaxed heating watchdog for T4 only on Buddy (runtime per-tool)"
+    )
+define_boolean_option(SYRINGE_RELAX_HEATUP_T4_ONLY ${SYRINGE_RELAX_HEATUP_T4_ONLY})
+
+set(SYRINGE_WATCH_TEMP_PERIOD
+    "300"
+    CACHE STRING "Buddy T4 watch temp period in seconds when T4 relax is enabled (default 300)"
+    )
+
+set(SYRINGE_WATCH_TEMP_INCREASE
+    "1"
+    CACHE STRING "Buddy T4 watch temp increase in °C when T4 relax is enabled (default 1)"
+    )
+
+set(SYRINGE_THERMAL_PROTECTION_PERIOD
+    "300"
+    CACHE STRING
+          "Buddy T4 thermal protection period in seconds when T4 relax is enabled (default 300)"
+    )
+
+# ---------------------------------------------------------------------------
+# UI Tweaks: Filament nozzle temperature limits
+# ---------------------------------------------------------------------------
+# Minimum nozzle temperature allowed in the Custom Filament UI. Defaults to Marlin's EXTRUDE_MINTEMP
+# unless overridden here. Set to 20 to allow very low-temperature custom materials (e.g., syringe
+# liquids) without relaxing Marlin's cold-extrusion safety globally.
+set(FILAMENT_CUSTOM_NOZZLE_MIN_TEMP
+    ""
+    CACHE STRING "Minimum nozzle temp (°C) in Custom Filament UI (empty = use EXTRUDE_MINTEMP)"
+    )

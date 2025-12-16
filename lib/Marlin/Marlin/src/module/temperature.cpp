@@ -71,6 +71,18 @@
 
 #include "printcounter.h"
 
+// Defensive defaults: some Marlin core headers may #undef WATCH_/THERMAL macros.
+// Ensure sane defaults so our per-tool overrides don't accidentally fall back to ~20s.
+#ifndef WATCH_TEMP_PERIOD
+#define WATCH_TEMP_PERIOD 120
+#endif
+#ifndef WATCH_TEMP_INCREASE
+#define WATCH_TEMP_INCREASE 2
+#endif
+#ifndef THERMAL_PROTECTION_PERIOD
+#define THERMAL_PROTECTION_PERIOD 120
+#endif
+
 #if ENABLED(EMERGENCY_PARSER)
   #include "../feature/emergency_parser.h"
 #endif
@@ -1483,7 +1495,13 @@ void Temperature::manage_heater() {
 
       #if ENABLED(THERMAL_PROTECTION_HOTENDS)
         // Check for thermal runaway
-        thermal_runaway_protection(tr_state_machine[e], temp_hotend[e].celsius, temp_hotend[e].target, (heater_ind_t)e, THERMAL_PROTECTION_PERIOD, THERMAL_PROTECTION_HYSTERESIS);
+        // Use per-tool thermal protection period when T4-only syringe relax is enabled
+      #if ENABLED(SYRINGE_RELAX_HEATUP_T4_ONLY)
+        const uint16_t thermal_period = (e == 4) ? SYRINGE_THERMAL_PROTECTION_PERIOD : THERMAL_PROTECTION_PERIOD;
+      #else
+        const uint16_t thermal_period = THERMAL_PROTECTION_PERIOD;
+      #endif
+        thermal_runaway_protection(tr_state_machine[e], temp_hotend[e].celsius, temp_hotend[e].target, (heater_ind_t)e, thermal_period, THERMAL_PROTECTION_HYSTERESIS);
       #endif
 
         {
@@ -2196,9 +2214,24 @@ void Temperature::init() {
    */
   void Temperature::start_watching_hotend(const uint8_t E_NAME) {
     const uint8_t ee = HOTEND_INDEX;
-    if (degTargetHotend(ee) && degHotend(ee) < degTargetHotend(ee) - (WATCH_TEMP_INCREASE + TEMP_HYSTERESIS + 1)) {
-      watch_hotend[ee].target = degHotend(ee) + WATCH_TEMP_INCREASE;
-      watch_hotend[ee].next_ms = millis() + (WATCH_TEMP_PERIOD) * 1000UL;
+    // Choose per-tool watch parameters when T4-only syringe relax is enabled
+#if ENABLED(SYRINGE_RELAX_HEATUP_T4_ONLY)
+    const uint16_t watch_period = (ee == 4) ? SYRINGE_WATCH_TEMP_PERIOD : WATCH_TEMP_PERIOD;
+    const uint8_t watch_increase = (ee == 4) ? SYRINGE_WATCH_TEMP_INCREASE : WATCH_TEMP_INCREASE;
+#else
+    const uint16_t watch_period = WATCH_TEMP_PERIOD;
+    const uint8_t watch_increase = WATCH_TEMP_INCREASE;
+#endif
+
+    if (degTargetHotend(ee) && degHotend(ee) < degTargetHotend(ee) - (watch_increase + TEMP_HYSTERESIS + 1)) {
+      watch_hotend[ee].target = degHotend(ee) + watch_increase;
+      watch_hotend[ee].next_ms = millis() + (watch_period) * 1000UL;
+    #if ENABLED(SYRINGE_RELAX_HEATUP_T4_ONLY)
+      if (ee == 4) {
+        SERIAL_ECHOPAIR("SYRINGE_T4: watch_period=", watch_period);
+        SERIAL_ECHOLN();
+      }
+    #endif
     }
     else
       watch_hotend[ee].next_ms = 0;

@@ -28,6 +28,7 @@
  */
 
 #include "../inc/MarlinConfig.h"
+#include <string.h>
 
 //#define DEBUG_GCODE_PARSER
 #if ENABLED(DEBUG_GCODE_PARSER)
@@ -138,12 +139,21 @@ public:
     // Code seen bit was set. If not found, value_ptr is unchanged.
     // This allows "if (seen('A')||seen('B'))" to use the last-found value.
     static inline bool seen(const char c) {
+      if (!command_ptr) return false;  // Defensive: no current command buffer
       const uint8_t ind = LETTER_BIT(c);
       if (ind >= COUNT(param)) return false; // Only A-Z
       const bool b = TEST32(codebits, ind);
       if (b) {
-        char * const ptr = command_ptr + param[ind];
-        value_ptr = param[ind] && valid_float(ptr) ? ptr : nullptr;
+        const uint8_t offset = param[ind];
+        // Guard against bogus offsets that could point outside the parsed line
+        const size_t cmd_len = strlen(command_ptr);
+        if (!offset || offset >= cmd_len) {
+          value_ptr = nullptr;
+          return false;
+        }
+
+        char * const ptr = command_ptr + offset;
+        value_ptr = valid_float(ptr) ? ptr : nullptr;
       }
       return b;
     }

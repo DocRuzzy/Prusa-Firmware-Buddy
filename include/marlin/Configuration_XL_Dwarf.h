@@ -23,6 +23,7 @@
 
 #define MOTHERBOARD BOARD_DWARF_V1
 
+#include "Configuration_XL_Syringe.h"
 // clang-format off
 
 /**

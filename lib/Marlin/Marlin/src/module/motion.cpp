@@ -26,6 +26,7 @@
 
 #include <array>
 
+#include <option/has_loadcell.h>
 #include "motion.h"
 #include "bsod.h"
 #include "endstops.h"
@@ -937,6 +938,7 @@ uint8_t do_homing_move(const AxisEnum axis, const float distance, const feedRate
 
     // HighPrecision needs to be enabled with some time margin to prime the filters.
     // If it hasn't been already we're being called in single-probe mode, enable it temporarily.
+#if HAS_LOADCELL()
     bool enableHighPrecision = !loadcell.IsHighPrecisionEnabled() && moving_probe_toward_bed;
     if (enableHighPrecision) SERIAL_ECHO_MSG("probe: enabling high-precision for single-probe mode");
     auto loadcellPrecisionEnabler = Loadcell::HighPrecisionEnabler(loadcell, enableHighPrecision);
@@ -947,6 +949,12 @@ uint8_t do_homing_move(const AxisEnum axis, const float distance, const feedRate
       loadcell.Tare(Loadcell::TareMode::Continuous);
       endstops.enable_z_probe();
     }
+    #else
+    if (moving_probe_toward_bed) {
+      safe_delay(Z_FIRST_PROBE_DELAY); // dampen the system before the tare
+      endstops.enable_z_probe();
+    }
+#endif
   #endif
 
   do_homing_move_axis_rel(axis, distance, real_fr_mm_s);
@@ -1292,7 +1300,9 @@ bool homeaxis(const AxisEnum axis, const feedRate_t fr_mm_s, bool invert_home_di
 
   #if ENABLED(NOZZLE_LOAD_CELL) && HOMING_Z_WITH_PROBE
     // Enable loadcell high precision across the entire axis homing to prime the noise filters
+#if HAS_LOADCELL()
     auto loadcellPrecisionEnabler = Loadcell::HighPrecisionEnabler(loadcell, axis == Z_AXIS);
+#endif
   #endif
 
   float (*min_diff)(uint8_t) = invert_home_dir ? axis_home_invert_min_diff : axis_home_min_diff;

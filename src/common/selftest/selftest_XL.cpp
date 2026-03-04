@@ -5,7 +5,9 @@
 #include <unistd.h>
 #include "selftest_axis.h"
 #include "selftest_heater.h"
-#include "selftest_loadcell.h"
+#if HAS_LOADCELL()
+    #include "selftest_loadcell.h"
+#endif
 #include "selftest_dock.h"
 #include "stdarg.h"
 #include "otp.hpp"
@@ -17,7 +19,9 @@
 #include "selftest_axis_type.hpp"
 #include "selftest_heaters_type.hpp"
 #include "selftest_heaters_interface.hpp"
-#include "selftest_loadcell_interface.hpp"
+#if HAS_LOADCELL()
+    #include "selftest_loadcell_interface.hpp"
+#endif
 #include "selftest_fsensor_interface.hpp"
 #include "selftest_axis_interface.hpp"
 #include "selftest_netstatus_interface.hpp"
@@ -25,7 +29,9 @@
 #include "selftest_tool_offsets_interface.hpp"
 #include "selftest_axis_config.hpp"
 #include "selftest_heater_config.hpp"
-#include "selftest_loadcell_config.hpp"
+#if HAS_LOADCELL()
+    #include "selftest_loadcell_config.hpp"
+#endif
 #include "selftest_fsensor_config.hpp"
 #include "calibration_z.hpp"
 #include "fanctl.hpp"
@@ -97,35 +103,64 @@ static const AxisConfig_t Config_ZAxis = {
 
 template <int index>
 static consteval HeaterConfig_t make_nozzle_config(const char *name) {
-    return {
-        .partname = name,
-        .type = heater_type_t::Nozzle,
-        .tool_nr = index,
-        .getTemp = []() { return thermalManager.temp_hotend[index].celsius; },
-        .setTargetTemp = [](int target_temp) { marlin_server::set_temp_to_display(target_temp, index); thermalManager.setTargetHotend(target_temp, index); },
-        .refKp = Temperature::temp_hotend[index].pid.Kp,
-        .refKi = Temperature::temp_hotend[index].pid.Ki,
-        .refKd = Temperature::temp_hotend[index].pid.Kd,
-        .heatbreak_fan_fnc = Fans::heat_break,
-        .print_fan_fnc = Fans::print,
-        .heat_time_ms = 42000,
-        .start_temp = 80,
-        .undercool_temp = 75,
-        .target_temp = 290,
-        /**
-         * @note Resulting temperature after nozzle heater test is set by the internal model control that is used in Dwarf.
-         * @todo Completely retune the PID in dwarf.
-         */
-        .heat_min_temp = 155,
-        .heat_max_temp = 245,
-        .heatbreak_min_temp = 10,
-        .heatbreak_max_temp = 45,
-        .heater_load_stable_ms = 1000,
-        .heater_full_load_min_W = 20, // 35 W +- 43%
-        .heater_full_load_max_W = 50,
-        .pwm_100percent_equivalent_value = 127,
-        .min_pwm_to_measure = 127 // Check power only when fully on
-    };
+    // T4 (index 4) is the syringe tool with heat tape - different heating characteristics
+    if constexpr (index == 4) {
+        return {
+            .partname = name,
+            .type = heater_type_t::Nozzle,
+            .tool_nr = index,
+            .getTemp = []() { return thermalManager.temp_hotend[index].celsius; },
+            .setTargetTemp = [](int target_temp) { marlin_server::set_temp_to_display(target_temp, index); thermalManager.setTargetHotend(target_temp, index); },
+            .refKp = Temperature::temp_hotend[index].pid.Kp,
+            .refKi = Temperature::temp_hotend[index].pid.Ki,
+            .refKd = Temperature::temp_hotend[index].pid.Kd,
+            .heatbreak_fan_fnc = Fans::heat_break,
+            .print_fan_fnc = Fans::print,
+            .heat_time_ms = 180000, // 180 seconds for slow heat tape heating
+            .start_temp = 30, // Start measuring when reaching 30°C
+            .undercool_temp = 25, // Room temperature baseline
+            .target_temp = 50, // Only test up to 50°C (not 290°C)
+            .heat_min_temp = 45, // Must reach at least 45°C
+            .heat_max_temp = 55, // Must not exceed 55°C
+            .heatbreak_min_temp = 10,
+            .heatbreak_max_temp = 45,
+            .heater_load_stable_ms = 1000,
+            .heater_full_load_min_W = 5, // Heat tape has lower power than cartridge heater
+            .heater_full_load_max_W = 25,
+            .pwm_100percent_equivalent_value = 127,
+            .min_pwm_to_measure = 127
+        };
+    } else {
+        return {
+            .partname = name,
+            .type = heater_type_t::Nozzle,
+            .tool_nr = index,
+            .getTemp = []() { return thermalManager.temp_hotend[index].celsius; },
+            .setTargetTemp = [](int target_temp) { marlin_server::set_temp_to_display(target_temp, index); thermalManager.setTargetHotend(target_temp, index); },
+            .refKp = Temperature::temp_hotend[index].pid.Kp,
+            .refKi = Temperature::temp_hotend[index].pid.Ki,
+            .refKd = Temperature::temp_hotend[index].pid.Kd,
+            .heatbreak_fan_fnc = Fans::heat_break,
+            .print_fan_fnc = Fans::print,
+            .heat_time_ms = 42000,
+            .start_temp = 80,
+            .undercool_temp = 75,
+            .target_temp = 290,
+            /**
+             * @note Resulting temperature after nozzle heater test is set by the internal model control that is used in Dwarf.
+             * @todo Completely retune the PID in dwarf.
+             */
+            .heat_min_temp = 155,
+            .heat_max_temp = 245,
+            .heatbreak_min_temp = 10,
+            .heatbreak_max_temp = 45,
+            .heater_load_stable_ms = 1000,
+            .heater_full_load_min_W = 20, // 35 W +- 43%
+            .heater_full_load_max_W = 50,
+            .pwm_100percent_equivalent_value = 127,
+            .min_pwm_to_measure = 127 // Check power only when fully on
+        };
+    }
 }
 
 static constexpr HeaterConfig_t Config_HeaterNozzle[] = {
@@ -164,6 +199,7 @@ static constexpr HeaterConfig_t Config_HeaterBed = {
     .min_pwm_to_measure = 26
 };
 
+#if HAS_LOADCELL()
 static consteval LoadcellConfig_t make_loadcell_config(uint8_t index, const char *name) {
     return {
         .partname = name,
@@ -189,6 +225,7 @@ static constexpr LoadcellConfig_t Config_Loadcell[] = {
     make_loadcell_config(3, "Loadcell 4"),
     make_loadcell_config(4, "Loadcell 5")
 };
+#endif
 
 static constexpr std::array<const FSensorConfig_t, HOTENDS> Config_FSensor = { {
     { .extruder_id = 0 },
@@ -242,7 +279,9 @@ protected:
     selftest::IPartHandler *pZAxis;
     std::array<selftest::IPartHandler *, HOTENDS> pNozzles;
     selftest::IPartHandler *pBed;
+#if HAS_LOADCELL()
     std::array<selftest::IPartHandler *, HOTENDS> m_pLoadcell;
+#endif
     std::array<selftest::IPartHandler *, HOTENDS> pDocks;
     selftest::IPartHandler *pToolOffsets;
     std::array<selftest::IPartHandler *, HOTENDS> pFSensor;
@@ -281,9 +320,11 @@ bool CSelftest::Start(const uint64_t test_mask, const selftest::TestData test_da
     if (m_Mask & stmHeaters) {
         m_Mask = (SelftestMask_t)(m_Mask | uint64_t(stmWait_heaters));
     }
+#if HAS_LOADCELL()
     if (m_Mask & stmLoadcell) {
         m_Mask = (SelftestMask_t)(m_Mask | uint64_t(stmWait_loadcell));
     }
+#endif
     m_Mask = (SelftestMask_t)(m_Mask | uint64_t(stmSelftestStop)); // any selftest state will trigger selftest additional deinit
 
     if (std::holds_alternative<ToolMask>(test_data)) {
@@ -320,6 +361,7 @@ void CSelftest::Loop() {
             return;
         }
         break;
+#if HAS_LOADCELL()
     case stsLoadcell:
         if ((ret = selftest::phaseLoadcell(tool_mask, m_pLoadcell, Config_Loadcell))) {
             return;
@@ -330,6 +372,7 @@ void CSelftest::Loop() {
             return;
         }
         break;
+#endif
     case stsZcalib: {
         // calib_Z(true) requires picked tool, which at this time may not be
         calib_Z(false);
@@ -449,9 +492,11 @@ bool CSelftest::Abort() {
     for (auto &pNozzle : pNozzles) {
         abort_part(&pNozzle);
     }
+#if HAS_LOADCELL()
     for (auto &loadcell : m_pLoadcell) {
         abort_part(&loadcell);
     }
+#endif
     abort_part((selftest::IPartHandler **)&pFSensor);
     for (auto &dock : pDocks) {
         abort_part(&dock);

@@ -1,3 +1,4 @@
+#include <option/has_loadcell.h>
 #include "toolchanger_utils.h"
 #include "tool_offset.hpp"
 #include "dock_position.hpp"
@@ -146,7 +147,9 @@ bool PrusaToolChangerUtils::update() {
                 log_info(PrusaToolChanger, "Deactivated Dwarf #%u", old_tool->dwarf_index());
 
                 active_dwarf = nullptr; // No dwarf is selected right now
+    #if HAS_LOADCELL()
                 loadcell.Clear(); // No loadcell is available now, make sure that it is not stuck in active mode
+    #endif
             }
             if (new_tool) {
                 if (new_tool->set_selected(true) == CommunicationStatus::ERROR) {

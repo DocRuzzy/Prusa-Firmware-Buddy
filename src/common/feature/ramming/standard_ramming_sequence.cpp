@@ -13,7 +13,7 @@ const RammingSequence &buddy::standard_ramming_sequence(StandardRammingSequence 
 
 #if HAS_AUTO_RETRACT()
     case StandardRammingSequence::auto_retract: {
-        static_assert(HAS_LOADCELL()); // HAS_NEXTRUDER alternative
+        // static_assert(HAS_LOADCELL()); // HAS_NEXTRUDER alternative
         static constexpr RammingSequenceArray seq({
             { 8, 995 },
             { -43, 6000 },

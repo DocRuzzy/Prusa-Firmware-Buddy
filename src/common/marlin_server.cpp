@@ -2422,6 +2422,8 @@ static void _server_print_loop(void) {
 
     case State::Aborting_UnloadFilament:
         if (is_processing()) {
+            // Defensive: ensure watchdog is reset while waiting for motion to complete
+            thermalManager.manage_heater();
             break;
         }
 
@@ -2437,11 +2439,16 @@ static void _server_print_loop(void) {
             disable_e_steppers();
             server.print_state = State::Aborted;
             finalize_print(false);
+        } else {
+            // Defensive: ensure watchdog is reset while waiting for parking motion to complete
+            thermalManager.manage_heater();
         }
         break;
     case State::Aborting_Preview:
         // Wait for operations to finish
         if (is_processing()) {
+            // Defensive: ensure watchdog is reset while waiting for operations to finish
+            thermalManager.manage_heater();
             break;
         }
 
@@ -2477,10 +2484,16 @@ static void _server_print_loop(void) {
                 park_head();
             }
 #endif // PARK_HEAD_ON_PRINT_FINISH
+        } else {
+            // Defensive: ensure watchdog is reset while waiting for planner to finish
+            // This prevents watchdog timeout if something causes processing to hang
+            thermalManager.manage_heater();
         }
         break;
     case State::Finishing_UnloadFilament:
         if (is_processing()) {
+            // Defensive: ensure watchdog is reset while waiting for motion to complete
+            thermalManager.manage_heater();
             break;
         }
 
@@ -2491,6 +2504,9 @@ static void _server_print_loop(void) {
         if (!is_processing()) {
             server.print_state = State::Finished;
             finalize_print(true);
+        } else {
+            // Defensive: ensure watchdog is reset while waiting for parking motion to complete
+            thermalManager.manage_heater();
         }
         break;
     case State::Exit:

@@ -1,3 +1,4 @@
+#include <option/has_loadcell.h>
 #include "../../lib/Marlin/Marlin/src/gcode/gcode.h"
 #include "../../../lib/Marlin/Marlin/src/module/motion.h"
 #include "../../../lib/Marlin/Marlin/src/module/planner.h"
@@ -74,9 +75,11 @@ void selftest::calib_Z([[maybe_unused]] bool move_down_after) {
     // Check loadcell before ramming
     if (z_probe) {
         endstops.enable_z_probe(); // Enable z probe to get GetMinZEndstop()
+    #if HAS_LOADCELL()
         if (loadcell.GetMinZEndstop()) { // Sitting on the nozzle, cannot ram the Z axis
             fatal_error(ErrCode::ERR_ELECTRO_HOMING_ERROR_Z); // There was something wrong with the Z homing
         }
+    #endif
         endstops.enable_z_probe(false);
     }
 

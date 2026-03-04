@@ -120,7 +120,11 @@ LoopResult CSelftestPart_Heater::stateSetup() {
 
 LoopResult CSelftestPart_Heater::stateTakeControlOverFans() {
     log_info(Selftest, "%s took control of fans", m_config.partname);
-    m_config.print_fan_fnc(m_config.tool_nr).enter_selftest_mode();
+    // T3 (tool_nr=3) has custom shroud, T4 (tool_nr=4) is syringe with no print fan
+    // Skip print fan control for both to avoid calibration failures
+    if (m_config.tool_nr != 3 && m_config.tool_nr != 4) {
+        m_config.print_fan_fnc(m_config.tool_nr).enter_selftest_mode();
+    }
     m_config.heatbreak_fan_fnc(m_config.tool_nr).enter_selftest_mode();
     return LoopResult::RunNext;
 }
@@ -128,7 +132,11 @@ LoopResult CSelftestPart_Heater::stateTakeControlOverFans() {
 LoopResult CSelftestPart_Heater::stateFansActivate() {
     if (enable_cooldown) {
         log_info(Selftest, "%s set fans to maximum", m_config.partname);
-        m_config.print_fan_fnc(m_config.tool_nr).selftest_set_pwm(255); // it will be restored by exitSelftestMode
+        // T3 (tool_nr=3) has custom shroud, T4 (tool_nr=4) is syringe with no print fan
+        // Skip print fan control for both to avoid calibration failures
+        if (m_config.tool_nr != 3 && m_config.tool_nr != 4) {
+            m_config.print_fan_fnc(m_config.tool_nr).selftest_set_pwm(255); // it will be restored by exitSelftestMode
+        }
         m_config.heatbreak_fan_fnc(m_config.tool_nr).selftest_set_pwm(255); // it will be restored by exitSelftestMode
     }
     return LoopResult::RunNext;
@@ -161,7 +169,11 @@ LoopResult CSelftestPart_Heater::stateCooldown() {
 }
 
 LoopResult CSelftestPart_Heater::stateFansDeactivate() {
-    m_config.print_fan_fnc(m_config.tool_nr).exit_selftest_mode();
+    // T3 (tool_nr=3) has custom shroud, T4 (tool_nr=4) is syringe with no print fan
+    // Skip print fan control for both to avoid calibration failures
+    if (m_config.tool_nr != 3 && m_config.tool_nr != 4) {
+        m_config.print_fan_fnc(m_config.tool_nr).exit_selftest_mode();
+    }
     m_config.heatbreak_fan_fnc(m_config.tool_nr).exit_selftest_mode();
     log_info(Selftest, "%s returned control of fans", m_config.partname);
     return LoopResult::RunNext;

@@ -261,6 +261,13 @@ Temperature thermalManager;
     #endif
     millis_t Temperature::next_heatbreak_check_ms;
 
+  // Syringe thermal control variables initialization
+  bool Temperature::syringe_manual_fan_control = false;
+  uint8_t Temperature::syringe_manual_fan_pwm = 0;
+  bool Temperature::syringe_logging_enabled = false;
+  float Temperature::syringe_tip_offset = 0.0f;
+  millis_t Temperature::syringe_last_log_time = 0;
+
 #endif
 
 #if HAS_TEMP_BOARD
@@ -1483,7 +1490,12 @@ void Temperature::manage_heater() {
 
       #if ENABLED(THERMAL_PROTECTION_HOTENDS)
         // Check for thermal runaway
-        thermal_runaway_protection(tr_state_machine[e], temp_hotend[e].celsius, temp_hotend[e].target, (heater_ind_t)e, THERMAL_PROTECTION_PERIOD, THERMAL_PROTECTION_HYSTERESIS);
+        #if ENABLED(SYRINGE_RELAX_HEATUP_T4_ONLY)
+          const uint16_t thermal_period = (e == 4) ? SYRINGE_THERMAL_PROTECTION_PERIOD : THERMAL_PROTECTION_PERIOD;
+        #else
+          const uint16_t thermal_period = THERMAL_PROTECTION_PERIOD;
+        #endif
+        thermal_runaway_protection(tr_state_machine[e], temp_hotend[e].celsius, temp_hotend[e].target, (heater_ind_t)e, thermal_period, THERMAL_PROTECTION_HYSTERESIS);
       #endif
 
         {
@@ -1664,28 +1676,68 @@ void Temperature::manage_heater() {
     if (ELAPSED(ms, next_heatbreak_check_ms)) {
       next_heatbreak_check_ms = ms + HEATBREAK_CHECK_INTERVAL;
 
-      #if ENABLED(PRUSA_TOOLCHANGER)
-          // fan is regulted on dwarf - just update marlin's PWM value
-          set_fan_speed(HEATBREAK_FAN_ID, prusa_toolchanger.getActiveToolOrFirst().get_heatbreak_fan_pwr());
-      #else
-        #if HOTENDS > 1
-          #error not supported
-        #endif
-        if (WITHIN(temp_heatbreak[0].celsius, HEATBREAK_MINTEMP, HEATBREAK_MAXTEMP)) {
-          #if ENABLED(HEATBREAK_LIMIT_SWITCHING)
-            if (temp_heatbreak[0].celsius >= temp_heatbreak[0].target + TEMP_HEATBREAK_HYSTERESIS)
-              temp_heatbreak[0].soft_pwm_amount = 0;
-            else if (temp_heatbreak[0].celsius <= temp_heatbreak[0].target - (TEMP_HEATBREAK_HYSTERESIS))
-              temp_heatbreak[0].soft_pwm_amount = MAX_HEATBREAK_POWER >> 1;
-          #elif ENABLED(PIDTEMPHEATBREAK)
-            temp_heatbreak[0].soft_pwm_amount = (int)get_pid_output_heatbreak();
-            set_fan_speed(HEATBREAK_FAN_ID, temp_heatbreak[0].soft_pwm_amount);
+      // Check if manual fan control is enabled (M306 F command)
+      if (syringe_manual_fan_control) {
+        // Manual mode: use user-specified PWM
+        temp_heatbreak[0].soft_pwm_amount = syringe_manual_fan_pwm;
+        set_fan_speed(HEATBREAK_FAN_ID, syringe_manual_fan_pwm);
+      } else {
+        // Auto mode: use PID or toolchanger control
+        #if ENABLED(PRUSA_TOOLCHANGER)
+            // fan is regulted on dwarf - just update marlin's PWM value
+            set_fan_speed(HEATBREAK_FAN_ID, prusa_toolchanger.getActiveToolOrFirst().get_heatbreak_fan_pwr());
+        #else
+          #if HOTENDS > 1
+            #error not supported
           #endif
-        } else {
-          temp_heatbreak[0].soft_pwm_amount = 255;
-          set_fan_speed(HEATBREAK_FAN_ID, temp_heatbreak[0].soft_pwm_amount);
-        }
-      #endif
+          if (WITHIN(temp_heatbreak[0].celsius, HEATBREAK_MINTEMP, HEATBREAK_MAXTEMP)) {
+            #if ENABLED(HEATBREAK_LIMIT_SWITCHING)
+              if (temp_heatbreak[0].celsius >= temp_heatbreak[0].target + TEMP_HEATBREAK_HYSTERESIS)
+                temp_heatbreak[0].soft_pwm_amount = 0;
+              else if (temp_heatbreak[0].celsius <= temp_heatbreak[0].target - (TEMP_HEATBREAK_HYSTERESIS))
+                temp_heatbreak[0].soft_pwm_amount = MAX_HEATBREAK_POWER >> 1;
+            #elif ENABLED(PIDTEMPHEATBREAK)
+              temp_heatbreak[0].soft_pwm_amount = (int)get_pid_output_heatbreak();
+              set_fan_speed(HEATBREAK_FAN_ID, temp_heatbreak[0].soft_pwm_amount);
+            #endif
+          } else {
+            temp_heatbreak[0].soft_pwm_amount = 255;
+            set_fan_speed(HEATBREAK_FAN_ID, temp_heatbreak[0].soft_pwm_amount);
+          }
+        #endif
+      } // end of auto mode else block
+
+      // Logging functionality for M306 L
+      if (syringe_logging_enabled && ELAPSED(ms, syringe_last_log_time)) {
+        syringe_last_log_time = ms + 1000; // Log every second
+
+        float time_s = millis() / 1000.0f;
+        float noz_target = temp_hotend[0].target;
+        float noz_current = temp_hotend[0].celsius;
+        float hb_current = temp_heatbreak[0].celsius;
+        int fan_pwm = temp_heatbreak[0].soft_pwm_amount;
+        float delta = hb_current - noz_current;
+
+        // 1. Serial Output (CSV format for easy parsing)
+        SERIAL_ECHO(time_s);
+        SERIAL_ECHOPGM(", ");
+        SERIAL_ECHO(noz_target);
+        SERIAL_ECHOPGM(", ");
+        SERIAL_ECHO(noz_current);
+        SERIAL_ECHOPGM(", ");
+        SERIAL_ECHO(hb_current);
+        SERIAL_ECHOPGM(", ");
+        SERIAL_ECHO(fan_pwm);
+        SERIAL_ECHOPGM(", ");
+        SERIAL_ECHOLN(delta);
+
+        // 2. System Logger Output (For "Save Logs to File" on USB)
+        // Only valid on Buddy/Master boards where USB logging is supported
+        #if !defined(BOARD_DWARF)
+          log_info(MarlinServer, "SyringeLog, %.2f, %.1f, %.1f, %.1f, %d, %.1f", 
+                   time_s, noz_target, noz_current, hb_current, fan_pwm, delta);
+        #endif
+      }
 
       #if ENABLED(THERMAL_PROTECTION_HEATBREAK)
         #error TODO: this is not implemented properly, fix if you want to use THERMAL_PROTECTION_HEATBREAK
@@ -2196,9 +2248,21 @@ void Temperature::init() {
    */
   void Temperature::start_watching_hotend(const uint8_t E_NAME) {
     const uint8_t ee = HOTEND_INDEX;
-    if (degTargetHotend(ee) && degHotend(ee) < degTargetHotend(ee) - (WATCH_TEMP_INCREASE + TEMP_HYSTERESIS + 1)) {
-      watch_hotend[ee].target = degHotend(ee) + WATCH_TEMP_INCREASE;
-      watch_hotend[ee].next_ms = millis() + (WATCH_TEMP_PERIOD) * 1000UL;
+      if (ee >= HOTENDS) {
+        return; // Ignore invalid tool indices (defensive)
+      }
+
+    #if ENABLED(SYRINGE_RELAX_HEATUP_T4_ONLY)
+      const uint16_t watch_period = (ee == 4) ? SYRINGE_WATCH_TEMP_PERIOD : WATCH_TEMP_PERIOD;
+      const uint8_t watch_increase = (ee == 4) ? SYRINGE_WATCH_TEMP_INCREASE : WATCH_TEMP_INCREASE;
+    #else
+      const uint16_t watch_period = WATCH_TEMP_PERIOD;
+      const uint8_t watch_increase = WATCH_TEMP_INCREASE;
+    #endif
+
+    if (degTargetHotend(ee) && degHotend(ee) < degTargetHotend(ee) - (watch_increase + TEMP_HYSTERESIS + 1)) {
+      watch_hotend[ee].target = degHotend(ee) + watch_increase;
+      watch_hotend[ee].next_ms = millis() + (watch_period) * 1000UL;
     }
     else
       watch_hotend[ee].next_ms = 0;

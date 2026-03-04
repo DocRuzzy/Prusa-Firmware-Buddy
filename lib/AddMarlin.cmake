@@ -135,6 +135,8 @@ if(BOARD_IS_MASTER_BOARD)
             Marlin/Marlin/src/gcode/temperature/M142.cpp
             Marlin/Marlin/src/gcode/temperature/M155.cpp
             Marlin/Marlin/src/gcode/temperature/M303.cpp
+            Marlin/Marlin/src/gcode/temperature/M306.cpp
+            Marlin/Marlin/src/gcode/temperature/M306.cpp
             Marlin/Marlin/src/gcode/units/M82_M83.cpp
             Marlin/Marlin/src/HAL/HAL_STM32_F4_F7/Servo.cpp
             Marlin/Marlin/src/HAL/HAL_STM32_F4_F7/STM32F7/TMC2660.cpp
@@ -252,4 +254,41 @@ target_link_libraries(Marlin PRIVATE CppStdExtensions logging freertos)
 
 if(HAS_XBUDDY_EXTENSION)
   target_link_libraries(Marlin PUBLIC XBuddyExtensionShared)
+endif()
+
+# Always define syringe thermal defaults for all tools (T0, T2, DWARF, T4) This ensures
+# temperature.cpp has valid values regardless of which options are enabled
+target_compile_definitions(
+  Marlin
+  PUBLIC # DWARF defaults (used if SYRINGE_RELAX_HEATUP_DWARF is enabled)
+         SYRINGE_DWARF_WATCH_TEMP_PERIOD=${SYRINGE_DWARF_WATCH_TEMP_PERIOD}
+         SYRINGE_DWARF_WATCH_TEMP_INCREASE=${SYRINGE_DWARF_WATCH_TEMP_INCREASE}
+         SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD=${SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD}
+         # T4 defaults (used if SYRINGE_RELAX_HEATUP_T4_ONLY is enabled)
+         SYRINGE_WATCH_TEMP_PERIOD=${SYRINGE_WATCH_TEMP_PERIOD}
+         SYRINGE_WATCH_TEMP_INCREASE=${SYRINGE_WATCH_TEMP_INCREASE}
+         SYRINGE_THERMAL_PROTECTION_PERIOD=${SYRINGE_THERMAL_PROTECTION_PERIOD}
+         # T4 minimum extrude temperature (syringe materials can operate at low temps)
+         SYRINGE_EXTRUDE_MINTEMP=${SYRINGE_EXTRUDE_MINTEMP}
+  )
+
+# Forward syringe options to Marlin preprocessor for DWARF builds
+if(SYRINGE_RELAX_HEATUP_DWARF)
+  target_compile_definitions(
+    Marlin
+    PUBLIC SYRINGE_RELAX_HEATUP_DWARF=1
+           SYRINGE_DWARF_WATCH_TEMP_PERIOD=${SYRINGE_DWARF_WATCH_TEMP_PERIOD}
+           SYRINGE_DWARF_WATCH_TEMP_INCREASE=${SYRINGE_DWARF_WATCH_TEMP_INCREASE}
+           SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD=${SYRINGE_DWARF_THERMAL_PROTECTION_PERIOD}
+    )
+endif()
+
+# Forward T4-only syringe options to Marlin preprocessor for Buddy builds
+if(SYRINGE_RELAX_HEATUP_T4_ONLY)
+  target_compile_definitions(
+    Marlin
+    PUBLIC SYRINGE_RELAX_HEATUP_T4_ONLY=1 SYRINGE_WATCH_TEMP_PERIOD=${SYRINGE_WATCH_TEMP_PERIOD}
+           SYRINGE_WATCH_TEMP_INCREASE=${SYRINGE_WATCH_TEMP_INCREASE}
+           SYRINGE_THERMAL_PROTECTION_PERIOD=${SYRINGE_THERMAL_PROTECTION_PERIOD}
+    )
 endif()

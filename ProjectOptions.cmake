@@ -327,6 +327,25 @@ set_feature_for_printers(HAS_BOWDEN "MINI")
 set(PRINTERS_WITH_PUPPIES_BOOTLOADER "XL" "iX" "XL_DEV_KIT" "COREONE")
 set(PRINTERS_WITH_DWARF "XL" "XL_DEV_KIT")
 
+# Syringe tool thermal relaxation - T4 uses heat tape with slower response Enable for XL printers
+# with syringe toolhead (T4)
+if(PRINTER STREQUAL "XL" OR PRINTER STREQUAL "XL_DEV_KIT")
+  set(SYRINGE_RELAX_HEATUP_T4_ONLY ON)
+  # T4 syringe thermal protection values (more relaxed than T0-T3)
+  set(SYRINGE_WATCH_TEMP_PERIOD 300) # 300s vs 120s for normal extruders
+  set(SYRINGE_WATCH_TEMP_INCREASE 2) # Same increase requirement
+  set(SYRINGE_THERMAL_PROTECTION_PERIOD 300) # 300s vs 20s for normal extruders
+  # T4 minimum extrude temperature - syringe materials can be as low as 25C
+  set(SYRINGE_EXTRUDE_MINTEMP 25)
+else()
+  set(SYRINGE_RELAX_HEATUP_T4_ONLY OFF)
+  # Define default values even when disabled to avoid CMake errors
+  set(SYRINGE_WATCH_TEMP_PERIOD 120)
+  set(SYRINGE_WATCH_TEMP_INCREASE 2)
+  set(SYRINGE_THERMAL_PROTECTION_PERIOD 20)
+  set(SYRINGE_EXTRUDE_MINTEMP 170)
+endif()
+
 # MODULAR_BED is a bed consisting of several bedlets
 set_feature_for_printers_master_board(HAS_MODULAR_BED "iX" "XL" "XL_DEV_KIT")
 # REMOTE_BED means there is a daughterboard controlling the bed

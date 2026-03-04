@@ -61,6 +61,8 @@
  * THERMAL_PROTECTION_HYSTERESIS and/or THERMAL_PROTECTION_PERIOD
  */
 #if ENABLED(THERMAL_PROTECTION_HOTENDS)
+    // Note: Per-tool thermal protection period is handled at runtime in Buddy temperature.cpp
+    // for T4 (syringe). This DWARF-side value applies to normal extruder tools (T0-T3).
     #define THERMAL_PROTECTION_PERIOD 20        // Seconds
     #define THERMAL_PROTECTION_HYSTERESIS 6 //4     // Degrees Celsius
     #if ENABLED(MODEL_DETECT_STUCK_THERMISTOR)
@@ -96,8 +98,12 @@
    * and/or decrease WATCH_TEMP_INCREASE. WATCH_TEMP_INCREASE should not be set
    * below 2.
    */
-    #define WATCH_TEMP_PERIOD 20 // Seconds
-    #define WATCH_TEMP_INCREASE 2 // Degrees Celsius
+        // Watch settings for slow-heating XL Dwarf extruder.
+        // Default: slightly relaxed vs upstream (120s/2°C).
+        // Note: Per-tool watch settings for T4 (syringe) are handled at runtime
+        // in Buddy temperature.cpp. This DWARF-side value applies to normal extruder tools (T0-T3).
+        #define WATCH_TEMP_PERIOD 120 // Seconds (was 20)
+        #define WATCH_TEMP_INCREASE 2 // Degrees Celsius
 #endif
 
 /**

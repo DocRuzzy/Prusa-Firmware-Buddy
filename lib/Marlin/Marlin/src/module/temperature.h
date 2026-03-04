@@ -286,6 +286,13 @@ class Temperature {
 
     #if HAS_TEMP_HEATBREAK
       static heatbreak_info_t temp_heatbreak[HOTENDS];
+
+      // Syringe thermal control variables
+      static bool syringe_manual_fan_control;      // True when M306 F is used
+      static uint8_t syringe_manual_fan_pwm;       // Manual fan PWM value (0-255)
+      static bool syringe_logging_enabled;         // True when M306 L logging active
+      static float syringe_tip_offset;             // Desired tip offset from nozzle (°C)
+      static millis_t syringe_last_log_time;       // Last logging timestamp
     #endif
 
     #if PRINTER_IS_PRUSA_iX()
@@ -312,9 +319,23 @@ class Temperature {
       static int16_t extrude_min_temp;
       FORCE_INLINE static bool tooCold(const int16_t temp) { return allow_cold_extrude ? false : temp < extrude_min_temp; }
       FORCE_INLINE static bool tooColdToExtrude(const uint8_t E_NAME) {
+        #if defined(SYRINGE_EXTRUDE_MINTEMP) && HOTENDS > 1
+          // T4 (syringe) uses lower min temp - syringe materials can be as low as 25C
+          const uint8_t ee = HOTEND_INDEX;
+          if (ee == 4) {
+            return allow_cold_extrude ? false : degHotend(ee) < SYRINGE_EXTRUDE_MINTEMP;
+          }
+        #endif
         return tooCold(degHotend(HOTEND_INDEX));
       }
       FORCE_INLINE static bool targetTooColdToExtrude(const uint8_t E_NAME) {
+        #if defined(SYRINGE_EXTRUDE_MINTEMP) && HOTENDS > 1
+          // T4 (syringe) uses lower min temp for target check too
+          const uint8_t ee = HOTEND_INDEX;
+          if (ee == 4) {
+            return allow_cold_extrude ? false : degTargetHotend(ee) < SYRINGE_EXTRUDE_MINTEMP;
+          }
+        #endif
         return tooCold(degTargetHotend(HOTEND_INDEX));
       }
     #else

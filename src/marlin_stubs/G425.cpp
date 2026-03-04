@@ -52,8 +52,11 @@
 #include "Marlin/src/gcode/gcode.h"
 #include "../../module/stepper.h"
 
+#include <option/has_loadcell.h>
 #if ENABLED(PRUSA_TOOLCHANGER)
-    #include "loadcell.hpp"
+    #if HAS_LOADCELL()
+        #include "loadcell.hpp"
+    #endif
     #include "../../module/prusa/toolchanger.h"
     #include "../../module/probe.h"
 #endif
@@ -284,6 +287,7 @@ xy_pos_t probe_xy(const xyz_pos_t center, const float angle, const uint8_t tool,
     xyze_pos_t initial_mm = current_position;
 
     // Setup probe for XY endstop
+#if HAS_LOADCELL()
     loadcell.set_xy_endstop(true);
 
     // Wait for resonance to damper and tare
@@ -296,6 +300,7 @@ xy_pos_t probe_xy(const xyz_pos_t center, const float angle, const uint8_t tool,
         // and why it happens we should add a red screen with appropriate text.
         bsod("XY probe triggered");
     }
+#endif
 
     // Expect pin hit
     endstops.enable_xy_probe(true);
@@ -311,7 +316,9 @@ xy_pos_t probe_xy(const xyz_pos_t center, const float angle, const uint8_t tool,
 #if ENABLED(CRASH_RECOVERY)
     crash_s.activate();
 #endif
+#if HAS_LOADCELL()
     loadcell.set_xy_endstop(false);
+#endif
     endstops.enable_xy_probe(false);
 
     // Something is terribly wrong, maybe the nozzle is already being bend, bail out.
@@ -531,9 +538,9 @@ const std::optional<xyz_pos_t> get_single_xyz_center(const xyz_pos_t initial, co
 }
 
 const std::optional<xyz_pos_t> get_xyz_center(const uint8_t tool) {
-
-    // Enable loadcell high precision across the entire procedure to prime the noise filters
+#if HAS_LOADCELL()
     auto loadcellPrecisionEnabler = Loadcell::HighPrecisionEnabler(loadcell);
+#endif
 
     std::optional<xyz_pos_t> center = true_top_center;
     for (Phase phase = Phase::first; phase != Phase::_count; phase = Phase(std::to_underlying(phase) + 1)) {

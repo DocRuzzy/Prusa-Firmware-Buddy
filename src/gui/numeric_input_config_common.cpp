@@ -13,7 +13,14 @@ const NumericInputConfig numeric_input_config::nozzle_temperature = {
 };
 
 const NumericInputConfig numeric_input_config::filament_nozzle_temperature = {
+// Use SYRINGE_EXTRUDE_MINTEMP (25C) as floor so custom syringe materials
+// can be created for T4.  The cold-extrusion guard in temperature.h keeps
+// T0-T3 safe at the normal EXTRUDE_MINTEMP (170C) level.
+#if defined(SYRINGE_EXTRUDE_MINTEMP)
+    .min_value = SYRINGE_EXTRUDE_MINTEMP,
+#else
     .min_value = EXTRUDE_MINTEMP,
+#endif
     .max_value = HEATER_0_MAXTEMP - HEATER_MAXTEMP_SAFETY_MARGIN,
     .unit = Unit::celsius,
 };

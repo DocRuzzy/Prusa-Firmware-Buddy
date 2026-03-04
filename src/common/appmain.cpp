@@ -159,7 +159,7 @@ extern "C" void touchscreen_timer_callback(TimerHandle_t) {
 }
 
 static StaticTimer_t touchscreen_timer_buffer;
-static auto touchscreen_timer = xTimerCreateStatic("touchscreen", pdMS_TO_TICKS(1), pdTRUE, 0, touchscreen_timer_callback, &touchscreen_timer_buffer);
+static auto touchscreen_timer = xTimerCreateStatic("touchscreen", pdMS_TO_TICKS(20), pdTRUE, 0, touchscreen_timer_callback, &touchscreen_timer_buffer);
 #endif
 
 static void app_startup() {

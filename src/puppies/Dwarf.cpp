@@ -7,7 +7,9 @@
 
 #include "bsod.h"
 #include <logging/log.hpp>
-#include "loadcell.hpp"
+#if HAS_LOADCELL()
+    #include "loadcell.hpp"
+#endif
 #include "timing.h"
 #include <logging/log_dest_bufflog.hpp>
 #include <assert.h>
@@ -259,6 +261,7 @@ CommunicationStatus Dwarf::pull_fifo_nolock(bool &more) {
     decoder.decode(*this);
 
     // Update sampling rate of the loadcell.ProcessSample()
+#if HAS_LOADCELL()
     if (loadcell_samplerate.count > 30) {
         float interval = static_cast<float>(loadcell_samplerate.last_timestamp - loadcell_samplerate.last_processed_timestamp) / static_cast<float>(1000 * loadcell_samplerate.count);
         // Ignore invalid values, values outside of 25% of expected value may be caused by glitch in modbus communication
@@ -268,6 +271,7 @@ CommunicationStatus Dwarf::pull_fifo_nolock(bool &more) {
         loadcell_samplerate.count = 0;
         loadcell_samplerate.last_processed_timestamp = loadcell_samplerate.last_timestamp;
     }
+#endif
 
     more = decoder.more();
     return status;
@@ -439,7 +443,8 @@ CommunicationStatus Dwarf::set_selected(bool selected) {
     if (selected) {
         // Enable loadcell for dwarf being selected in case the accelerometer is not already enabled
         // This condition prevents replacing accelerometer with loadcell when recovering from puppy failure
-        if (!AccelerometerEnableCoil.value) {
+        // Skip load cell for T4 (syringe tool, dwarf_nr==5) as it doesn't have a load cell
+        if (!AccelerometerEnableCoil.value && dwarf_nr != 5) {
             if (!set_loadcell_nolock(true)) {
                 return CommunicationStatus::ERROR;
             }
@@ -487,6 +492,10 @@ bool Dwarf::set_loadcell_nolock(bool active) {
 }
 
 bool Dwarf::raw_set_loadcell(bool enable) {
+    // Skip load cell for T4 (syringe tool, dwarf_nr==5) as it doesn't have a load cell
+    if (dwarf_nr == 5) {
+        return true; // Pretend success - T4 has no load cell
+    }
     LoadcellEnableCoil.dirty = true;
     LoadcellEnableCoil.value = enable;
     return bus.write(unit, LoadcellEnableCoil) == CommunicationStatus::OK;
@@ -700,7 +709,9 @@ void Dwarf::decode_loadcell(const LoadcellRecord &data) {
     loadcell_samplerate.count++;
 
     // Process sample
+#if HAS_LOADCELL()
     loadcell.ProcessSample(data.loadcell_raw_value, loadcell_samplerate.last_timestamp);
+#endif
 }
 
 void Dwarf::decode_accelerometer_fast(const AccelerometerFastData &data) {

@@ -671,6 +671,10 @@ private:
     static void M142();
   #endif
 
+  #if HAS_TEMP_HEATBREAK
+    static void M306();  // Syringe thermal control (manual fan + logging)
+  #endif
+
   #if ENABLED(TEMPERATURE_UNITS_SUPPORT)
     static void M149();
   #endif

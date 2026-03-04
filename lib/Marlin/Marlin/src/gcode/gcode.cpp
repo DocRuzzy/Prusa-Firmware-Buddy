@@ -647,6 +647,10 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
         case 303: M303(); break;                                  // M303: PID autotune
       #endif
 
+      #if HAS_TEMP_HEATBREAK
+        case 306: M306(); break;                                  // M306: Syringe thermal control (manual fan + logging)
+      #endif
+
       #if ENABLED(MORGAN_SCARA)
         case 360: if (M360()) return; break;                      // M360: SCARA Theta pos1
         case 361: if (M361()) return; break;                      // M361: SCARA Theta pos2

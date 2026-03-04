@@ -10,6 +10,16 @@
 
 LOG_COMPONENT_REF(Selftest);
 
+// T3 (index 3) has custom microneedle shroud with non-stock air paths
+// T4 (index 4) is the syringe tool - has no print fan and no load cell
+// Both use non-standard hardware so calibration checks are skipped
+static constexpr int MICRONEEDLE_TOOL_INDEX = 3;
+static constexpr int SYRINGE_TOOL_INDEX = 4;
+
+static inline bool is_non_standard_tool(int tool_index) {
+    return tool_index == MICRONEEDLE_TOOL_INDEX || tool_index == SYRINGE_TOOL_INDEX;
+}
+
 namespace {
 bool passed_for_all_that_always_need_to_pass(const SelftestResult &results) {
     for (int e = 0; e < HOTENDS; e++) {
@@ -18,6 +28,11 @@ bool passed_for_all_that_always_need_to_pass(const SelftestResult &results) {
             continue;
         }
 #endif /*HAS_TOOLCHANGER()*/
+
+        // T3 and T4 use non-standard hardware - skip calibration checks
+        if (is_non_standard_tool(e)) {
+            continue;
+        }
 
         if (results.tools[e].printFan != TestResult_Passed) {
             return false;
@@ -91,6 +106,11 @@ bool SelftestResult_Failed(const SelftestResult &results) {
             continue;
         }
 #endif /*HAS_TOOLCHANGER()*/
+
+        // T3 and T4 use non-standard hardware - skip failure checks
+        if (is_non_standard_tool(e)) {
+            continue;
+        }
 
         if (results.tools[e].printFan == TestResult_Failed) {
             return true;

@@ -359,8 +359,11 @@ bool Touchscreen_GT911::handle_read_error() {
 
     // And even before that, try restarting just the I2C
     else {
-        log_warning(Touch, "Touch error, restarting I2C");
-        metric_record_string(metric_touch_event(), "restart_i2c");
+        // Rate limit logging to prevent TmrSvc starvation / Watchdog timeouts
+        if (consecutive_read_error_count_ % retries_before_reset == 1) {
+            log_warning(Touch, "Touch error, restarting I2C");
+            metric_record_string(metric_touch_event(), "restart_i2c");
+        }
         i2c::ChannelMutex _anym(I2C_HANDLE_FOR(touch));
         HAL_I2C_DeInit(&CONCAT(hi2c, i2c_touch));
         I2C_INIT(touch);

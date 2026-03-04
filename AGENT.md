@@ -34,7 +34,7 @@
 1. [ ] Reconfigure CMake if changing CMake files: `cmake --preset xl_release_boot -B build/xl_release_boot`
 2. [ ] Build with: `cd build/xl_release_boot && cmake --build . --target firmware -j$(nproc)`
 3. [ ] Verify build succeeded (check memory usage in output)
-4. [ ] Copy BBF file with date: `cp build/xl_release_boot/firmware.bbf dist/firmware-6.4.0+11775-$(date +%y_%m_%d)-DESCRIPTION.bbf`
+4. [ ] Copy BBF file with date: `cp build/xl_release_boot/firmware.bbf dist/firmware-6.4.1-beta-$(date +%y_%m_%d)-DESCRIPTION.bbf`
 5. [ ] Verify file size is ~4MB (not ~2MB - that's .bin, wrong file!)
 6. [ ] Update this document and TODO.md with fix details
 
@@ -118,8 +118,8 @@ cmake --preset xl_release_boot -B build/xl_release_boot
 cd build/xl_release_boot && cmake --build . --target firmware -j$(nproc)
 
 # Copy to dist with descriptive name INCLUDING DATE (format: YY_MM_DD)
-# Example for Feb 5, 2026: firmware-6.4.0+11775-26_02_05-YOUR-DESCRIPTION.bbf
-cp firmware.bbf ../../dist/firmware-6.4.0+11775-$(date +%y_%m_%d)-YOUR-DESCRIPTION.bbf
+# Example for Mar 4, 2026: firmware-6.4.1-beta-26_03_04-YOUR-DESCRIPTION.bbf
+cp firmware.bbf ../../dist/firmware-6.4.1-beta-$(date +%y_%m_%d)-YOUR-DESCRIPTION.bbf
 
 # Verify (should be ~4MB)
 ls -lh ../../dist/firmware-*.bbf | tail -3
@@ -145,26 +145,29 @@ python3 utils/build.py --preset xl_release_boot
 
 To confirm syringe options are enabled:
 ```bash
-grep -o "SYRINGE[A-Z_]*=[0-9]*" build/xl_release_boot/compile_commands.json | sort | uniq
+grep -o "SYRINGE[A-Z0-9_]*=[0-9]*" build/xl_release_boot/compile_commands.json | sort | uniq
 ```
 
 Expected output:
 ```
+SYRINGE_EXTRUDE_MINTEMP=25
 SYRINGE_RELAX_HEATUP_T4_ONLY=1
 SYRINGE_THERMAL_PROTECTION_PERIOD=300
 SYRINGE_WATCH_TEMP_INCREASE=2
 SYRINGE_WATCH_TEMP_PERIOD=300
 ```
 
+Note: `SYRINGE_RELAX_HEATUP_T4_ONLY` requires `[A-Z0-9_]*` in the pattern (T4 contains a digit).
+
 ### Firmware Output Naming Convention
 
 **CRITICAL**: Every build must go to `/dist` with a unique, dated name to prevent overwrites.
 
-**Format**: `firmware-6.4.0+11775-YY_MM_DD-DESCRIPTION.bbf`
+**Format**: `firmware-6.4.1-beta-YY_MM_DD-DESCRIPTION.bbf`
 
 **Examples**:
-- `firmware-6.4.0+11775-26_02_05-t4-selftest-bypass.bbf` (Feb 5, 2026)
-- `firmware-6.4.0+11775-26_01_29-t4-loadcell-fix.bbf` (Jan 29, 2026)
+- `firmware-6.4.1-beta-26_03_04-syringe-rebase.bbf` (Mar 4, 2026)
+- `firmware-6.4.0+11775-26_02_05-t4-selftest-bypass.bbf` (Feb 5, 2026, old base)
 
 **Why dates matter**:
 - Multiple builds per day for testing
@@ -174,16 +177,30 @@ SYRINGE_WATCH_TEMP_PERIOD=300
 
 **Auto-generate date**:
 ```bash
-cp firmware.bbf ../../dist/firmware-6.4.0+11775-$(date +%y_%m_%d)-DESCRIPTION.bbf
+cp firmware.bbf ../../dist/firmware-6.4.1-beta-$(date +%y_%m_%d)-DESCRIPTION.bbf
 ```
 
 ---
 
 ## Completed Fixes Log
 
-> **Naming Convention (as of 2026-02-05)**: All new builds should use format:
-> `firmware-6.4.0+11775-YY_MM_DD-DESCRIPTION.bbf` where YY_MM_DD is the build date.
-> Example: `firmware-6.4.0+11775-26_02_05-t4-selftest-bypass.bbf`
+> **Naming Convention (as of 2026-03-04)**: All new builds should use format:
+> `firmware-6.4.1-beta-YY_MM_DD-DESCRIPTION.bbf` where YY_MM_DD is the build date.
+> Example: `firmware-6.4.1-beta-26_03_04-syringe-rebase.bbf`
+
+### 2026-03-04: Rebase onto v6.4.1-beta
+
+- **Change**: Rebased all custom syringe mods from `v6.4.0-alpha` to `v6.4.1-beta`
+- **New branch**: `custom/xl-syringe-6.4.1-beta`
+- **Upstream fixes included**:
+  - Homing failure fix when no tool selected (motion.cpp)
+  - Toolchanger service move feedrate fix (toolchanger_utils.cpp)
+  - Relaxed print fan selftest thresholds (selftest_heater.cpp)
+  - Nozzle cleaning validation adjustments (marlin_server.cpp)
+- **All custom mods preserved**: patch applied cleanly, no conflicts
+- **Build**: `dist/firmware-6.4.1-beta-26_03_04-syringe-rebase.bbf`
+- **Firmware version**: `6.4.1+12011`
+- **Flash usage**: 96.60% (1898224 B / 1919 KB)
 
 ### 2026-01-04: Parser Guard Fix
 - **Problem**: GCodeParser::seen() dereferenced out-of-bounds offsets during multi-hour prints
@@ -462,6 +479,7 @@ temperature.cpp
 
 | Date | Author | Change |
 |------|--------|--------|
+| 2026-03-04 | Claude | Rebased all syringe mods onto v6.4.1-beta; new branch custom/xl-syringe-6.4.1-beta |
 | 2026-02-18 | Copilot | Added SYRINGE_EXTRUDE_MINTEMP for low-temp T4 materials |
 | 2026-02-18 | Copilot | Consolidated AGENT.md as single source of truth; slimmed CLAUDE.md and copilot-instructions.md |
 | 2026-02-05 | Claude | Created unified AGENT.md, fixed SYRINGE_RELAX_HEATUP_T4_ONLY CMake issue |

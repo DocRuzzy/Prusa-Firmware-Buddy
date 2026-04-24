@@ -28,6 +28,14 @@
 #include "../../module/temperature.h"
 #include "logging/log.hpp"  // Enable system logging
 
+#if ENABLED(PRUSA_TOOLCHANGER)
+// On XL toolchanger, heatbreak fans are controlled by the dwarf boards.
+// set_fan_speed(HEATBREAK_FAN_ID, ...) only updates Marlin's internal tracking
+// and does NOT send any command to the dwarf. The correct path is via Fans::heat_break().
+#  include "fanctl.hpp"
+#  include <puppies/Dwarf.hpp>
+#endif
+
 /** \addtogroup G-Codes
  * @{
  */
@@ -95,12 +103,19 @@ void GcodeSuite::M306() {
     thermalManager.syringe_manual_fan_control = true;
     thermalManager.syringe_manual_fan_pwm = fan_pwm;
 
+    // For XL toolchanger: command the dwarf directly via the proper modbus path.
+    // set_fan_speed(HEATBREAK_FAN_ID, ...) only updates Marlin's internal fan_speed[]
+    // array on the Buddy board and never reaches the dwarf.
+    #if ENABLED(PRUSA_TOOLCHANGER)
+    Fans::heat_break(target_extruder).set_pwm(fan_pwm);
+    #endif
+
     SERIAL_ECHOPGM("Manual fan mode: PWM=");
     SERIAL_ECHO(fan_pwm);
     SERIAL_ECHOPGM(" (");
     SERIAL_ECHO((fan_pwm * 100 / 255));
     SERIAL_ECHOLNPGM("%)");
-    
+
     log_info(MarlinServer, "Syringe: Manual Fan Set PWM=%d", fan_pwm);
     return;
   }
@@ -108,6 +123,14 @@ void GcodeSuite::M306() {
   // Handle auto mode (A parameter)
   if (parser.seen('A')) {
     thermalManager.syringe_manual_fan_control = false;
+
+    // For XL toolchanger: restore dwarf to autonomous PID control by sending
+    // FAN_MODE_AUTO_PWM (0xFFFF). The dwarf exits "selftest mode" and resumes
+    // its own heatbreak temperature PID loop.
+    #if ENABLED(PRUSA_TOOLCHANGER)
+    Fans::heat_break(target_extruder).set_pwm(buddy::puppies::Dwarf::FAN_MODE_AUTO_PWM);
+    #endif
+
     SERIAL_ECHOLNPGM("Auto fan mode enabled (PID control)");
     log_info(MarlinServer, "Syringe: Auto Fan Mode Enabled");
     return;

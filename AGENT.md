@@ -118,8 +118,8 @@ cmake --preset xl_release_boot -B build/xl_release_boot
 cd build/xl_release_boot && cmake --build . --target firmware -j$(nproc)
 
 # Copy to dist with descriptive name INCLUDING DATE (format: YY_MM_DD)
-# Example for Mar 4, 2026: firmware-6.4.1-beta-26_03_04-YOUR-DESCRIPTION.bbf
-cp firmware.bbf ../../dist/firmware-6.4.1-beta-$(date +%y_%m_%d)-YOUR-DESCRIPTION.bbf
+# Example for Apr 24, 2026: firmware-6.4.1-26_04_24-YOUR-DESCRIPTION.bbf
+cp firmware.bbf ../../dist/firmware-6.4.1-$(date +%y_%m_%d)-YOUR-DESCRIPTION.bbf
 
 # Verify (should be ~4MB)
 ls -lh ../../dist/firmware-*.bbf | tail -3
@@ -163,11 +163,11 @@ Note: `SYRINGE_RELAX_HEATUP_T4_ONLY` requires `[A-Z0-9_]*` in the pattern (T4 co
 
 **CRITICAL**: Every build must go to `/dist` with a unique, dated name to prevent overwrites.
 
-**Format**: `firmware-6.4.1-beta-YY_MM_DD-DESCRIPTION.bbf`
+**Format**: `firmware-6.4.1-YY_MM_DD-DESCRIPTION.bbf`
 
 **Examples**:
-- `firmware-6.4.1-beta-26_03_04-syringe-rebase.bbf` (Mar 4, 2026)
-- `firmware-6.4.0+11775-26_02_05-t4-selftest-bypass.bbf` (Feb 5, 2026, old base)
+- `firmware-6.4.1-26_04_24-syringe-rebase.bbf` (Apr 24, 2026)
+- `firmware-6.4.1-beta-26_03_04-syringe-rebase.bbf` (Mar 4, 2026, beta base)
 
 **Why dates matter**:
 - Multiple builds per day for testing
@@ -177,16 +177,27 @@ Note: `SYRINGE_RELAX_HEATUP_T4_ONLY` requires `[A-Z0-9_]*` in the pattern (T4 co
 
 **Auto-generate date**:
 ```bash
-cp firmware.bbf ../../dist/firmware-6.4.1-beta-$(date +%y_%m_%d)-DESCRIPTION.bbf
+cp firmware.bbf ../../dist/firmware-6.4.1-$(date +%y_%m_%d)-DESCRIPTION.bbf
 ```
 
 ---
 
 ## Completed Fixes Log
 
-> **Naming Convention (as of 2026-03-04)**: All new builds should use format:
-> `firmware-6.4.1-beta-YY_MM_DD-DESCRIPTION.bbf` where YY_MM_DD is the build date.
-> Example: `firmware-6.4.1-beta-26_03_04-syringe-rebase.bbf`
+> **Naming Convention (as of 2026-04-24)**: All new builds should use format:
+> `firmware-6.4.1-YY_MM_DD-DESCRIPTION.bbf` where YY_MM_DD is the build date.
+> Example: `firmware-6.4.1-26_04_24-syringe-rebase.bbf`
+
+### 2026-04-24: Rebase onto v6.4.1 (full release)
+
+- **Change**: Rebased all custom syringe mods from `v6.4.1-beta` to `v6.4.1` (full release)
+- **New branch**: `custom/xl-syringe-6.4.1`
+- **Method**: `git cherry-pick` of 3 commits from `custom/xl-syringe-6.4.1-beta`
+- **Conflict resolved**: `selftest_XL.cpp` — v6.4.1 removed `stmSelftestStart`; kept our `#if HAS_LOADCELL()` guard, dropped the removed line
+- **All custom mods preserved**: thermal protection, load cell skip, T3/T4 selftest bypass, M306, DWARF fan path fix
+- **Build**: `dist/firmware-6.4.1-26_04_24-syringe-rebase.bbf`
+- **Firmware version**: `6.4.1+12029`
+- **Flash usage**: 96.62% (CCMRAM at 99.08%)
 
 ### 2026-03-04: Rebase onto v6.4.1-beta
 
@@ -479,6 +490,7 @@ temperature.cpp
 
 | Date | Author | Change |
 |------|--------|--------|
+| 2026-04-24 | Claude | Rebased all syringe mods onto v6.4.1 full release; new branch custom/xl-syringe-6.4.1 |
 | 2026-03-04 | Claude | Rebased all syringe mods onto v6.4.1-beta; new branch custom/xl-syringe-6.4.1-beta |
 | 2026-02-18 | Copilot | Added SYRINGE_EXTRUDE_MINTEMP for low-temp T4 materials |
 | 2026-02-18 | Copilot | Consolidated AGENT.md as single source of truth; slimmed CLAUDE.md and copilot-instructions.md |

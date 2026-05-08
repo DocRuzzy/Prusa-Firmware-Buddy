@@ -158,6 +158,41 @@ You should see a **parabola-like** relationship:
 
 **Important:** Even if two fan speeds produce the same manifold temperature, prefer the **higher** fan speed because more heated air reaches the actual syringe tip.
 
+## Recent Firmware Changes
+
+### 2026-05-08: T4 Z Homing Freeze Fix + Dock Calibration Unblock
+
+T4 has no load cell. Any attempt to home Z with T4 active previously caused a permanent freeze because `do_homing_move()` called `loadcell.Tare()` → `WaitBarrier()`, which waited forever for samples that T4's hardware never produces.
+
+**Fix 1 — Z homing guard** (`lib/Marlin/Marlin/src/module/motion.cpp`):
+Added a guard in `homeaxis()` that intercepts Z homing when `active_extruder == 4`. Z is marked as homed at the current position and the function returns immediately — no movement, no load cell call. This fires regardless of how G28 Z is triggered (direct command, toolchange-induced internal G28, etc.).
+
+> **Implication for use:** `G28 Z` or `G28` with T4 active is now safe but does nothing to Z. Position Z manually before printing with T4.
+
+**Fix 2 — Dock calibration selftest skip** (`src/common/selftest/selftest_dock.cpp`):
+The dock recalibration selftest's final pick/park verification cycles issued `T4 S1 L0 D0`, which could trigger an internal G28 → same freeze. Added `dock_id == 4` early returns in `state_selftest_pick()` and `state_selftest_park()`. The dock position measurement (G28 XY + coordinate computation) still runs fully; only the pick/park verification is skipped.
+
+**Build:** `dist/firmware-6.4.1-26_05_08-t4-z-home-fix.bbf`
+
+---
+
+### 2026-05-08: Expanded Tool Offset Limits
+
+Increased nozzle offset limits to accommodate the syringe tool's mounting geometry (syringe body offsets T4 further from the carriage zero than a standard extruder):
+
+| Axis | Old limit | New limit |
+|------|-----------|-----------|
+| X    | ±1 mm     | ±2 mm     |
+| Y    | ±1 mm     | ±2 mm     |
+| Z max | 1.45 mm  | 10.0 mm   |
+| Z min | −2 mm    | −2 mm (unchanged) |
+
+Files: `include/marlin/Configuration_XL.h`, `include/marlin/Configuration_XL_DEV_KIT.h`
+
+**Build:** `dist/firmware-6.4.1-26_05_08-tool-offset-expansion.bbf` (built earlier same day; the z-home-fix build above also includes this change)
+
+---
+
 ## Next Steps (Not Yet Implemented)
 
 ### Phase 2: Automatic Control (Future)
@@ -191,7 +226,7 @@ You should see a **parabola-like** relationship:
 
 ## Technical Details
 
-See the [implementation plan](/home/rkpirlo/.claude/plans/shimmying-growing-toast.md) for detailed technical information about:
+See [AGENT.md](AGENT.md) for detailed technical information about:
 - Control theory analysis
 - Why simple PID modification won't work
 - Future implementation roadmap
@@ -203,6 +238,7 @@ Contact the firmware development team or file an issue in the repository.
 
 ---
 
-**Branch:** feature/syringe-thermal-control
-**Status:** Phase 1 Complete (Manual Control & Logging)
-**Last Updated:** 2026-01-11
+**Branch:** custom/xl-syringe-6.4.1
+**Base:** v6.4.1 (firmware 6.4.1+12030)
+**Status:** Phase 1 Complete (Manual Control & Logging) — Z homing and dock calibration stable for T4
+**Last Updated:** 2026-05-08

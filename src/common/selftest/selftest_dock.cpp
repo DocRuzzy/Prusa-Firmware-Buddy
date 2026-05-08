@@ -391,6 +391,11 @@ LoopResult CSelftestPart_Dock::state_selftest_entry() {
 
 LoopResult CSelftestPart_Dock::state_selftest_pick() {
 
+    // T4 (syringe) has no load cell — skip pick/park selftest entirely
+    if (config.dock_id == 4) {
+        return LoopResult::RunNext;
+    }
+
     // Check tool parked before picking it
     if (dwarf.is_picked() || !dwarf.is_parked()) {
         log_error(Selftest, "Tool %d not parked while self-testing pick", config.dock_id);
@@ -405,6 +410,11 @@ LoopResult CSelftestPart_Dock::state_selftest_pick() {
 }
 
 LoopResult CSelftestPart_Dock::state_selftest_park() {
+
+    // T4 (syringe) has no load cell — skip pick/park selftest entirely
+    if (config.dock_id == 4) {
+        return LoopResult::RunNext;
+    }
 
     // Check tool picked before parking it
     if (!dwarf.is_picked() || dwarf.is_parked()) {

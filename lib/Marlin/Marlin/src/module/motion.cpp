@@ -1289,6 +1289,15 @@ bool homeaxis(const AxisEnum axis, const feedRate_t fr_mm_s, bool invert_home_di
     if (!CAN_HOME_X && !CAN_HOME_Y && !CAN_HOME_Z) return true;
   #endif
 
+#if ENABLED(NOZZLE_LOAD_CELL) && HOMING_Z_WITH_PROBE
+  // T4 (syringe, active_extruder==4) has no load cell; loadcell.Tare() in do_homing_move()
+  // would block forever in WaitBarrier(). Mark Z as homed at current position instead.
+  if (axis == Z_AXIS && active_extruder == 4) {
+    axes_home_level[Z_AXIS] = AxisHomeLevel::full;
+    return true;
+  }
+#endif
+
   if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPAIR(">>> homeaxis(", axis_codes[axis], ")");
 
   const int axis_home_dir = (

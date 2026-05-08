@@ -1065,12 +1065,12 @@
 // @section machine
 
 // Nozzle offset limits
-#define X_MIN_OFFSET -1
-#define X_MAX_OFFSET 1
-#define Y_MIN_OFFSET -1
-#define Y_MAX_OFFSET 1
+#define X_MIN_OFFSET -2
+#define X_MAX_OFFSET 2
+#define Y_MIN_OFFSET -2
+#define Y_MAX_OFFSET 2
 #define Z_MIN_OFFSET -2
-#define Z_MAX_OFFSET 1.45f
+#define Z_MAX_OFFSET 10.0f
 
 // The size of the print bed
 #define X_BED_SIZE 360

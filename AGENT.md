@@ -188,6 +188,27 @@ cp firmware.bbf ../../dist/firmware-6.4.1-$(date +%y_%m_%d)-DESCRIPTION.bbf
 > `firmware-6.4.1-YY_MM_DD-DESCRIPTION.bbf` where YY_MM_DD is the build date.
 > Example: `firmware-6.4.1-26_04_24-syringe-rebase.bbf`
 
+### 2026-05-08: T4 Z Homing Freeze Fix + Dock Calibration Unblock
+
+- **Problem 1**: Any G28 (Z) with T4 active froze the printer permanently
+- **Root Cause**: `do_homing_move()` unconditionally calls `loadcell.Tare()` → `WaitBarrier()`, which waits forever for load cell samples that T4's hardware never produces
+- **Fix**: Added guard in `homeaxis()` (motion.cpp) before the `loadcellPrecisionEnabler`: if `axis == Z_AXIS && active_extruder == 4`, mark Z as `AxisHomeLevel::full` at current position and return immediately (no movement, no load cell calls)
+- **Problem 2**: Dock recalibration for T4 also froze (selftest pick/park phase issues `T4 S1 L0 D0` which can trigger G28 internally; also the selftest itself serves no purpose for a tool with no load cell)
+- **Fix**: Added `if (config.dock_id == 4) return RunNext;` early returns in `state_selftest_pick()` and `state_selftest_park()` in selftest_dock.cpp — the dock position measurement (G28 XY) still runs and saves; only the pick/park verification cycles are skipped
+- **Files**: [lib/Marlin/Marlin/src/module/motion.cpp](lib/Marlin/Marlin/src/module/motion.cpp) (after CAN_HOME guard in `homeaxis()`), [src/common/selftest/selftest_dock.cpp](src/common/selftest/selftest_dock.cpp) (lines ~392, ~407)
+- **Build**: `dist/firmware-6.4.1-26_05_08-t4-z-home-fix.bbf`
+- **Impact**: T0–T3 Z homing and dock calibration unchanged. T4 Z "home" is a silent no-op (current position treated as home); T4 dock calibration completes through position measurement successfully
+
+### 2026-05-08: Increased Tool Offset Limits
+
+- **Change**: Expanded nozzle offset limits in both XL config headers to accommodate syringe mounting geometry
+- **New limits**:
+  - X: ±1 mm → ±2 mm
+  - Y: ±1 mm → ±2 mm
+  - Z max: 1.45 mm → 10.0 mm (Z min unchanged at -2 mm)
+- **Files**: [include/marlin/Configuration_XL.h](include/marlin/Configuration_XL.h), [include/marlin/Configuration_XL_DEV_KIT.h](include/marlin/Configuration_XL_DEV_KIT.h) (lines ~1068–1073 in both)
+- **Impact**: G425 calibration validator and nozzle offset UI both use these `#define`s directly — no other changes needed. T0-T3 are unaffected at runtime; the wider window simply allows larger offsets to be stored.
+
 ### 2026-04-24: Rebase onto v6.4.1 (full release)
 
 - **Change**: Rebased all custom syringe mods from `v6.4.1-beta` to `v6.4.1` (full release)
@@ -490,6 +511,8 @@ temperature.cpp
 
 | Date | Author | Change |
 |------|--------|--------|
+| 2026-05-08 | Claude | T4 Z homing freeze fix (homeaxis guard) + dock calibration selftest skip |
+| 2026-05-08 | Claude | Increased tool offset limits: X/Y ±1→±2 mm, Z max 1.45→10.0 mm |
 | 2026-04-24 | Claude | Rebased all syringe mods onto v6.4.1 full release; new branch custom/xl-syringe-6.4.1 |
 | 2026-03-04 | Claude | Rebased all syringe mods onto v6.4.1-beta; new branch custom/xl-syringe-6.4.1-beta |
 | 2026-02-18 | Copilot | Added SYRINGE_EXTRUDE_MINTEMP for low-temp T4 materials |

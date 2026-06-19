@@ -26,6 +26,21 @@ ls -lh dist/firmware-*.bbf
 | `firmware.bin` | ~2MB | Programmer only (NOT for USB) |
 | `firmware` | ~150MB | Debug only (ELF) |
 
+### UBL First-Layer Regression Fix (Completed 2026-06-19)
+- **Status**: MERGED
+- **Issue**: The defensive parser bounds-check patch made `parser.seen()` return false for present parameters without numeric values. That broke bare flags in the stock-like XL start gcode, most importantly `G29 G` and `G29 A`, so UBL probing could run without actually enabling bed leveling for the first layer.
+- **Fix**: In [lib/Marlin/Marlin/src/gcode/parser.h](lib/Marlin/Marlin/src/gcode/parser.h), keep the bounds guard but return true for present bare flags while leaving `value_ptr = nullptr`.
+- **Build**: `dist/firmware-6.4.1-26_06_19-parser-bare-flag-fix.bbf`
+- **Files**: [lib/Marlin/Marlin/src/gcode/parser.h](lib/Marlin/Marlin/src/gcode/parser.h)
+
+### G425 T4 Skip Fix (Completed 2026-06-18)
+- **Status**: MERGED
+- **Issue**: G425 nozzle calibration hangs indefinitely on T4 (no load cell → `loadcell.WaitBarrier()` blocks forever), preventing `save_tool_offsets()` from being called → T1/T2/T3 offsets remain stale → T1 first layer too high
+- **Fix**: Skip T4 in G425 `calibrate_all_simple()`: no probing, reset T4 offset to 0 after normalize, skip T4 bounds check
+- **Build**: `dist/firmware-6.4.1-26_06_18-g425-t4-skip.bbf`
+- **Files**: [src/marlin_stubs/G425.cpp](src/marlin_stubs/G425.cpp)
+- **After flashing**: Re-run Tool Offsets calibration (G425 via selftest wizard) to save fresh T1/T2/T3 offsets
+
 ---
 
 ## Critical Fixes & Stability
@@ -35,7 +50,7 @@ ls -lh dist/firmware-*.bbf
 - **Issue**: GCodeParser::seen() could dereference out-of-bounds offsets, causing watchdog timeout during multi-hour prints on T0/T2
 - **Commit**: Added defensive bounds checks in parser.h and start_watching_hotend() in temperature.cpp
 - **Build**: `dist/firmware-6.4.0+11775-parser-guards.bbf`
-- **Testing**: Field validated
+- **Testing**: Updated by the 2026-06-19 bare-flag follow-up fix
 - **Docs**: See [lib/Marlin/Marlin/src/gcode/parser.h#L134-L162](lib/Marlin/Marlin/src/gcode/parser.h#L134-L162) for implementation
 
 ### Watchdog Post-Print Fix (Completed 2026-01-08)

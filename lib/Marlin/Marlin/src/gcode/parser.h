@@ -149,7 +149,7 @@ public:
         const size_t cmd_len = strlen(command_ptr);
         if (!offset || offset >= cmd_len) {
           value_ptr = nullptr;
-          return false;
+          return true;
         }
 
         char * const ptr = command_ptr + offset;

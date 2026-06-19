@@ -188,6 +188,32 @@ cp firmware.bbf ../../dist/firmware-6.4.1-$(date +%y_%m_%d)-DESCRIPTION.bbf
 > `firmware-6.4.1-YY_MM_DD-DESCRIPTION.bbf` where YY_MM_DD is the build date.
 > Example: `firmware-6.4.1-26_04_24-syringe-rebase.bbf`
 
+### 2026-06-19: UBL First-Layer Regression Fix — Parser Bare-Flag Handling
+
+- **Problem**: T1 first layer was too high on our custom firmware but correct on stock firmware, even though manual Z homing and raw T1-at-Z0 checks looked normal.
+- **Root Cause**: The defensive 2026-01-04 parser bounds-check patch changed `GCodeParser::seen()` to return `false` when a parameter had no numeric value. That broke valid bare-letter flags such as `G29 G` and `G29 A` in the print start gcode. On the XL, UBL uses `parser.seen('G')` to wait for preheat and `parser.seen('A')` to activate leveling. The mesh probing commands still ran, but `G29 A` could be ignored, leaving leveling inactive for the first layer.
+- **Fix**: Keep the bounds guard in `parser.h`, but when a parameter is present with no value, return `true` and set `value_ptr = nullptr` instead of reporting the flag as unseen.
+- **Files**: [lib/Marlin/Marlin/src/gcode/parser.h](lib/Marlin/Marlin/src/gcode/parser.h)
+- **Build**: `dist/firmware-6.4.1-26_06_19-parser-bare-flag-fix.bbf`
+- **Impact**: Restores correct handling of bare flags throughout Marlin while preserving the out-of-bounds safety guard. Verified to fix the XL T1 first-layer issue with the user's stock-like start gcode.
+
+### 2026-06-18: G425 T4 Calibration Skip Fix
+
+### 2026-06-18: G425 T4 Calibration Skip Fix
+
+- **Problem**: T1 (and other stock tools) first layer was too high when our custom firmware was used, worked correctly on stock 6.4.2
+- **Root Cause**: G425 (nozzle calibration) loops over all enabled tools including T4. T4 has no load cell, so `probe_xy()` called `loadcell.WaitBarrier()` which **hangs forever** waiting for load cell samples that T4's DWARF never produces. G425 never reached `save_tool_offsets()`, so T1/T2/T3 offsets in EEPROM were stale from an earlier calibration state. When stock firmware was flashed, the user ran the calibration wizard which re-calibrated T1 correctly.
+- **Fix**: In `calibrate_all_simple()` in G425.cpp:
+  1. Skip T4 in the measurement loop (no probing, no WaitBarrier hang)
+  2. Skip T4 in the offset apply loop (don't set hotend_offset[4])
+  3. After `normalize_hotend_offsets()`, explicitly `reset()` T4's offset to 0
+  4. Skip T4 in the bounds validation loop
+  - T4's offset is set to 0 after G425; user can adjust via nozzle offset UI (Settings > Tool > T4) if needed
+- **Files**: [src/marlin_stubs/G425.cpp](src/marlin_stubs/G425.cpp)
+- **Build**: `dist/firmware-6.4.1-26_06_18-g425-t4-skip.bbf`
+- **Impact**: T0–T3 calibrate normally. T4 is skipped and its offset is set to 0. G425 now completes successfully and saves T1/T2/T3 offsets correctly.
+- **User action required**: After flashing this firmware, **re-run the Tool Offsets calibration** (selftest wizard or G425) so T1/T2/T3 get fresh correct offsets saved.
+
 ### 2026-05-08: T4 Z Homing Freeze Fix + Dock Calibration Unblock
 
 - **Problem 1**: Any G28 (Z) with T4 active froze the printer permanently
@@ -205,7 +231,8 @@ cp firmware.bbf ../../dist/firmware-6.4.1-$(date +%y_%m_%d)-DESCRIPTION.bbf
 - **New limits**:
   - X: ±1 mm → ±2 mm
   - Y: ±1 mm → ±2 mm
-  - Z max: 1.45 mm → 10.0 mm (Z min unchanged at -2 mm)
+  - Z min: -2 mm → -6 mm
+  - Z max: 1.45 mm → 10.0 mm
 - **Files**: [include/marlin/Configuration_XL.h](include/marlin/Configuration_XL.h), [include/marlin/Configuration_XL_DEV_KIT.h](include/marlin/Configuration_XL_DEV_KIT.h) (lines ~1068–1073 in both)
 - **Impact**: G425 calibration validator and nozzle offset UI both use these `#define`s directly — no other changes needed. T0-T3 are unaffected at runtime; the wider window simply allows larger offsets to be stored.
 
@@ -386,7 +413,13 @@ cp firmware.bbf ../../dist/firmware-6.4.1-$(date +%y_%m_%d)-DESCRIPTION.bbf
 - Buddy: `if (e == 4)` (0-based)
 - DWARF: `if (dwarf_nr == 5)` (1-based)
 
-### 4. Forgetting DWARF Firmware
+### 4. Parser Guards Must Preserve Bare Flags
+**Symptom**: G-code commands with valueless flags behave as if the flag was omitted
+**Cause**: Returning `false` from `GCodeParser::seen()` when a present parameter has no numeric value
+**Fix**: If the flag exists but has no parseable value, keep `seen()` true and set `value_ptr = nullptr`
+**Example**: `G29 A` and `G29 G` on the XL rely on bare-letter flags for UBL activation and preheat waiting
+
+### 5. Forgetting DWARF Firmware
 **Symptom**: Changes in BUDDY code don't take effect
 **Cause**: Dual firmware system - some changes need DWARF update too
 **Fix**: Build combined image or update both firmwares

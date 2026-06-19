@@ -1069,7 +1069,7 @@
 #define X_MAX_OFFSET 2
 #define Y_MIN_OFFSET -2
 #define Y_MAX_OFFSET 2
-#define Z_MIN_OFFSET -2
+#define Z_MIN_OFFSET -6
 #define Z_MAX_OFFSET 10.0f
 
 // The size of the print bed

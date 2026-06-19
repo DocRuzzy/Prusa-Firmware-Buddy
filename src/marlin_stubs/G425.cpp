@@ -711,6 +711,12 @@ inline bool calibrate_all_simple() {
             continue;
         }
 #endif
+        // T4 (syringe tool) has no load cell - cannot be calibrated with pin-probing.
+        // Skip it here; its offset will be zeroed after normalization.
+        if (e == 4) {
+            centers[e] = {}; // zeroed, won't be used
+            continue;
+        }
         tool_change(e, tool_return_t::no_return);
         std::optional<xyz_pos_t> center = get_xyz_center(e);
         if (!center.has_value()) {
@@ -742,13 +748,23 @@ inline bool calibrate_all_simple() {
         if (!prusa_toolchanger.getTool(e).is_enabled()) {
             continue;
         }
+        // T4 (syringe tool) has no load cell and was not probed - skip it here;
+        // it will be zeroed explicitly after normalization.
+        if (e == 4) {
+            continue;
+        }
         // One might ask why the "-" in front of the centers[e].
         // Remember, when tool is bend +x it will find the object at the position -x.
         hotend_offset[e] = -centers[e];
     }
     normalize_hotend_offsets();
+    // Reset T4 offset to 0 after normalization - T4 was not probed and has no valid
+    // measurement. The user sets T4's Z via the nozzle offset UI if needed.
+    if (prusa_toolchanger.getTool(4).is_enabled()) {
+        hotend_offset[4].reset();
+    }
 
-    // Check offsets
+    // Check offsets (skip T4 - it was not calibrated, offset is intentionally 0)
     HOTEND_LOOP() {
 #if ENABLED(PRUSA_TOOLCHANGER)
         if (!prusa_toolchanger.getTool(e).is_enabled()) {
@@ -756,6 +772,9 @@ inline bool calibrate_all_simple() {
             continue;
         }
 #endif
+        if (e == 4) {
+            continue; // T4 syringe: no load cell, not calibrated via G425
+        }
 
         if (hotend_offset[e].x < X_MIN_OFFSET || hotend_offset[e].x > X_MAX_OFFSET) {
             fatal_error(ErrCode::ERR_MECHANICAL_TOOL_OFFSET_OUT_OF_BOUNDS, e + 1, 'X', static_cast<double>(hotend_offset[e].x), static_cast<double>(X_MIN_OFFSET), static_cast<double>(X_MAX_OFFSET));
